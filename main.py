@@ -1,4 +1,5 @@
 from paho.mqtt.client import Client
+from multiprocessing import Queue
 from collections import defaultdict
 import json
 import sys
@@ -7,10 +8,9 @@ import sqlite3
 
 global database, SUBS
 database = defaultdict(lambda:[])
-IGNORE_TOPICS = (
-    "relay/0/set",
+IGNORE_TOPICS = lambda n:(
+    n+"/relay/0/set",
 )
-IGNORE_TOPICS = tuple("SonoffS31/"+i for i in IGNORE_TOPICS)
 
 CREATE_TABBLES = [
 """CREATE TABLE [IF NOT EXISTS]
@@ -55,24 +55,44 @@ IF @@ROWCOUNT=0
 """
 
 
-def set_host(name: str=None, ip: str=None, desc: str=None, ssid: str=None, mac: str=None, rssi: int=None):
-    """Adds a host to the database. Returns True if failed, False if succeeded."""
-    raise NotImplemented()
-
-
 def on_connect(client, userdata, flags, rc):
     if rc != 0:
         print(f"Connection failed: {rc}")
-    print("Connected")
-    client.subscribe("#")
+    else:
+        print("Connected")
+        client.subscribe("#")
+    return rc
+
+
+class Message:
+    def __init__(self, msg):
+        self.topic = msg.topic
+        self.payload = msg.payload
 
 
 def on_message(client, userdata, msg):
-    if msg.topic in IGNORE_TOPICS:
+    global messages_in
+
+    print()
+    if msg.topic in IGNORE_TOPICS(msg.topic.split('/')[0]):
         print(f"Ignoring msg from topic {msg.topic}")
     else:
-        print(f"{msg.datetime} - {msg.topic}: {str(msg.payload.decode())}")
-        database[msg.topic].append(msg.payload.decode())
+        #print("{}: {}".format(msg.topic, str(msg.payload.decode())))
+        messages_in.put(Message(msg))
+
+
+def save_message(msg):
+    """Handles how to save the msg contents into the SQLite database."""
+    raise NotImplemented()
+
+
+def loop():
+    global messages_in
+
+    while True:
+        msg = messages_in.get()
+        print("{}: {}".format(msg.topic, str(msg.payload.decode())))
+        save_message(msg)
 
 
 def read_info(path):
@@ -82,6 +102,10 @@ def read_info(path):
 
 def main():
     global database
+    global messages_in
+    messages_in = Queue()
+
+    database = open_database("database.sqlite")
 
     client = Client()
     client.on_connect = on_connect
@@ -90,15 +114,15 @@ def main():
     creds, host = read_info("secret.json")
 
     client.username_pw_set(*creds)
-    r = client.connect(*host, 60)
+    client.connect(*host, 60)
 
     try:
-        client.loop_forever()
+        client.loop_start()
+        loop()
     except KeyboardInterrupt: pass
     finally:
         client.disconnect()
-        with open('database.json', 'w') as f:
-            f.write(json.dumps(database))
+        close_database()
 
 
 if __name__ == '__main__':
