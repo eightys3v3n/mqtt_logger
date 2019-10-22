@@ -4,14 +4,19 @@ from collections import defaultdict
 import json
 import sys
 import sqlite3
+from pathlib import Path
 
 
 global database, SUBS
-database = defaultdict(lambda:[])
-IGNORE_TOPICS = lambda n:(
-    n+"/relay/0/set",
+
+"""Topics to ignore, n matches any root topic.
+This allows ignoring relay/0/set coming from any root topic (any device)."""
+IGNORE_TOPICS = lambda root:(
+    root+"/relay/0/set",
 )
 
+"""Command to create the database, this is run every time the database is opened.
+So you need the [IF NOT EXISTS] part."""
 CREATE_TABBLES = [
 """CREATE TABLE [IF NOT EXISTS]
 host(
@@ -24,12 +29,31 @@ host(
 """CREATE TABLE [IF NOT EXISTS]
 state(
     datetime    DATETIME PRIMARY KEY,
-    FOREIGN KEY (mac) REFERENCES host(MAC),
+    FOREIGN KEY (host_name) REFERENCES host(name),
     state       BOOLEAN,
     current     DECIMAL,
     voltage     DECIMAL,
     power       DECIMAL,
     energy      DECIMAL)"""]
+
+"""
+The topics for all the SQL table columns, same order as the table creation command above.
+
+host        str
+ip          str
+desc        str
+ssid        str
+mac         str
+rssi        int
+
+datetime    datetime
+host        str
+relay/0     boolean
+current     float
+voltage     int
+power       float
+energy      float
+"""
 
 
 def open_database(path: str):
@@ -49,6 +73,8 @@ def close_database():
 
 
 """
+This is an example command to update or add a value.
+
 update test set name='john' where id=3012
 IF @@ROWCOUNT=0
    insert into test(name) values('john');
@@ -111,9 +137,14 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
 
+    if not Path("secret.json").exists():
+        raise Exception("Need to create secret.json as stated in the README.md")
+
     creds, host = read_info("secret.json")
 
-    client.username_pw_set(*creds)
+    if creds[0] != "" and creds[1] != "":
+        client.username_pw_set(*creds)
+
     client.connect(*host, 60)
 
     try:
@@ -123,6 +154,7 @@ def main():
     finally:
         client.disconnect()
         close_database()
+        
 
 
 if __name__ == '__main__':
@@ -130,27 +162,4 @@ if __name__ == '__main__':
 
 
 
-"""
-SQL table
 
-relay/0     [0|1]
-host        str
-desc        str
-ssid        str
-ip          str
-mac         str
-rssi        int
-datetime    datetime
-
-current     float
-voltage     int
-power       float
-energy      float
-
-
-
-
-
-
-
-"""
