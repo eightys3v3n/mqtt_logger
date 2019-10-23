@@ -10,6 +10,8 @@ from pathlib import Path
 
 global database, SUBS
 
+COMMIT_INTERVAL = 10 # minutes
+DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
 This allows ignoring relay/0/set coming from any root topic (any device)."""
 IGNORE_TOPICS = lambda root:(
@@ -33,12 +35,38 @@ state(
     datetime    DATETIME2 PRIMARY KEY,
     host_name   VARCHAR(128),
     state       BOOLEAN,
+    FOREIGN KEY (host_name) REFERENCES host(name)
+)""",
+"""CREATE TABLE IF NOT EXISTS
+current(
+    datetime    DATETIME2 PRIMARY KEY,
+    host_name   VARCHAR(128),
     current     DECIMAL,
+    FOREIGN KEY (host_name) REFERENCES host(name)
+)""",
+"""CREATE TABLE IF NOT EXISTS
+voltage(
+    datetime    DATETIME2 PRIMARY KEY,
+    host_name   VARCHAR(128),
     voltage     DECIMAL,
+    FOREIGN KEY (host_name) REFERENCES host(name)
+)""",
+"""CREATE TABLE IF NOT EXISTS
+power(
+    datetime    DATETIME2 PRIMARY KEY,
+    host_name   VARCHAR(128),
     power       DECIMAL,
+    FOREIGN KEY (host_name) REFERENCES host(name)
+)""",
+"""CREATE TABLE IF NOT EXISTS
+energy(
+    datetime    DATETIME2 PRIMARY KEY,
+    host_name   VARCHAR(128),
     energy      DECIMAL,
     FOREIGN KEY (host_name) REFERENCES host(name)
 )"""]
+
+last_commit = datetime.now()
 
 """
 The topics for all the SQL table columns, same order as the table creation command above.
@@ -75,15 +103,6 @@ def close_database():
     database.close()
 
 
-"""
-This is an example command to update or add a value.
-
-update test set name='john' where id=3012
-IF @@ROWCOUNT=0
-   insert into test(name) values('john');
-"""
-
-
 def on_connect(client, userdata, flags, rc):
     if rc != 0:
         print(f"Connection failed: {rc}")
@@ -104,6 +123,9 @@ class Message:
         else:
             self.payload = msg.payload
         self.datetime = datetime.now()
+       
+    def datetime_str(self):
+        return self.datetime.strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 def on_message(client, userdata, msg):
@@ -118,7 +140,8 @@ def on_message(client, userdata, msg):
 
 def db_execute(cmd, data):
     global database
-    print(cmd, data)
+    if DEBUG_PRINT_SQL:
+        print(cmd, data)
     database.execute(cmd, data)
 
 
@@ -129,10 +152,18 @@ def host_update(host_name: str, column: str, data):
     db_execute(cmd, (data, host_name))
 
 
-def state_update(host_name: str, datetime: datetime, column: str, data):
-    raise NotImplemented()
-    """ The database needs to have seperate tables for all the datetime sensitive things.
-        Then for every MQTT message a new row will be created."""
+def update(table: str, datetime: datetime, host_name: str, column: str, data):
+    cmd = "INSERT INTO {}(datetime, host_name, {}) VALUES(?, ?, ?)".format(table, column)
+    db_execute(cmd, (datetime, host_name, data))
+
+
+def periodic_commit():
+    global last_commit, database
+    r = datetime.now() - last_commit
+    minutes = (r.seconds//60)%60
+    if minutes >= COMMIT_INTERVAL:
+        print("{}: Committing database.".format(datetime.now()))
+        database.commit()
 
 
 def save_message(msg):
@@ -150,15 +181,21 @@ def save_message(msg):
         host_update(msg.root, "RSSI", msg.payload)
 
     elif msg.topic == "relay/0":
-        pass
+        update("state", msg.datetime_str(), msg.root, "state",
+                True if msg.payload == '1' else False)
     elif msg.topic == "current":
-        pass
+        update("current", msg.datetime_str(), msg.root, "current",
+                float(msg.payload))
     elif msg.topic == "voltage":
-        pass
+        update("voltage", msg.datetime_str(), msg.root, "voltage",
+                float(msg.payload))
     elif msg.topic == "power":
-        pass
+        update("power", msg.datetime_str(), msg.root, "power",
+                float(msg.payload))
     elif msg.topic == "energy":
-        pass
+        update("energy", msg.datetime_str(), msg.root, "energy",
+                float(msg.payload))
+    periodic_commit()
 
 
 def loop():
