@@ -10,6 +10,7 @@ from pathlib import Path
 
 global database, SUBS
 
+DATABASE_PATH = Path("/var/local/mqtt_logger/database.sqlite")
 COMMIT_INTERVAL = 10 # minutes
 DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
@@ -232,7 +233,7 @@ def main():
     client.connect(*host, 60)
 
     try:
-        database = open_database("database.sqlite")
+        database = open_database(DATABASE_FILE)
         client.loop_start()
         loop()
     except KeyboardInterrupt: pass
