@@ -233,7 +233,7 @@ def main():
     client.connect(*host, 60)
 
     try:
-        database = open_database(DATABASE_FILE)
+        database = open_database(DATABASE_PATH)
         client.loop_start()
         loop()
     except KeyboardInterrupt: pass
