@@ -165,6 +165,7 @@ def periodic_commit():
     if minutes >= COMMIT_INTERVAL:
         print("{}: Committing database.".format(datetime.now()))
         database.commit()
+        last_commit = datetime.now()
 
 
 def save_message(msg):
