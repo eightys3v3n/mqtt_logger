@@ -11,8 +11,7 @@ import mysql.connector
 global database, SUBS
 
 DATABASE_PATH = Path("/var/local/mqtt_logger/database.sqlite")
-COMMIT_INTERVAL = 10 # minutes
-DEBUG_PRINT_SQL = True
+DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
 This allows ignoring relay/0/set coming from any root topic (any device)."""
 IGNORE_TOPICS = lambda root:(
@@ -43,8 +42,7 @@ stat(
     FOREIGN KEY (host_name) REFERENCES host(name)
 )"""]
 
-last_commit = datetime.now()
-DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 """
 The topics for all the SQL table columns, same order as the table creation command above.
@@ -68,7 +66,7 @@ energy      float
 
 def open_database(user: str, password: str):
     global database
-    database = mysql.connector.connect(host="127.0.0.1", user=user, passwd=password, database="mqtt_logger")
+    database = mysql.connector.connect(host="127.0.0.1", user=user, passwd=password, database="mqtt_logger", autocommit=True)
     cursor = database.cursor()
     for create_table in CREATE_TABLES:
         db_execute(create_table)
@@ -139,19 +137,6 @@ def host_update(host_name: str, column: str, data):
         db_execute(cmd, (data, host_name))
 
 
-def ignore_data(host_name, column, data):
-    cmd = "SELECT MAX(datetime), {0} FROM {0}".format(column)
-    if data != 0:
-        return False
-
-    res = db_execute(cmd)
-    res = res.fetchone()
-    if res[1] == data:
-        print("Ignoring data {}:{} because it is the same as the last recorded value of 0".format(column, data))
-        return True
-    return False
-
-
 def get_latest_row(host_name):
     cmd = "SELECT datetime, state, current, voltage, power, energy FROM stat WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
@@ -159,35 +144,44 @@ def get_latest_row(host_name):
     return res
 
 
-def update_stat(dt: datetime, host_name: str, column: str, data):
-    if ignore_data(host_name, column, data):
-        return
+def get_last_state(host_name):
+    cmd = "SELECT state FROM stat WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
+    res = db_execute(cmd, (host_name,))
+    res = res.fetchone()
+    if len(res) == 1:
+        return res[0]
+    else:
+        return Nnoe
 
+
+def carry_last_state(host_name: str, dt: str):
+    last_state = get_last_state(host_name)
+    cmd = "UPDATE stat SET state=%s WHERE host_name=%s AND datetime=%s"
+    db_execute(cmd, (last_state, host_name, dt))
+    print("Carried last state")
+
+
+def update_stat(dt: datetime, host_name: str, column: str, data):
     latest = get_latest_row(host_name)
     latest_dt = latest[0]
-    
+
     if latest is None or latest_dt < dt - timedelta(seconds=3) or latest_dt > dt + timedelta(seconds=3):
         cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
-        data = (data, host_name, dt.strftime(DATETIME_FORMAT))
+        sql_data = (data, host_name, dt.strftime(DATETIME_FORMAT))
+        print("Adding a new row, {}, {}={}".format(dt, column, data))
     else:
         cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
-        data = (data, host_name, latest_dt.strftime(DATETIME_FORMAT))
+        sql_data = (data, host_name, latest_dt.strftime(DATETIME_FORMAT))
+        print("Updating existing row, {}, {}={}".format(latest_dt, column, data))
 
     try:
-        db_execute(cmd, data)
+        db_execute(cmd, sql_data)
     except mysql.connector.errors.IntegrityError as e:
         host_update(host_name, None, None)
-        db_execute(cmd, data)
+        db_execute(cmd, sql_data)
 
-
-def periodic_commit():
-    global last_commit, database
-    r = datetime.now() - last_commit
-    minutes = (r.seconds//60)%60
-    if minutes >= COMMIT_INTERVAL:
-        print("{}: Committing database.".format(datetime.now()))
-        database.commit()
-        last_commit = datetime.now()
+    if column != "state":
+        carry_last_state(host_name, sql_data[-1])
 
 
 def save_message(msg):
@@ -219,7 +213,6 @@ def save_message(msg):
     elif msg.topic == "energy":
         update_stat(msg.datetime, msg.root, "energy",
                 float(msg.payload))
-    periodic_commit()
 
 
 def loop():
