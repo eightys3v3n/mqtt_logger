@@ -163,16 +163,15 @@ def carry_last_state(host_name: str, dt: str):
 
 def update_stat(dt: datetime, host_name: str, column: str, data):
     latest = get_latest_row(host_name)
-    latest_dt = latest[0]
 
-    if latest is None or latest_dt < dt - timedelta(seconds=3) or latest_dt > dt + timedelta(seconds=3):
+    if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
         cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
         sql_data = (data, host_name, dt.strftime(DATETIME_FORMAT))
         print("Adding a new row, {}, {}={}".format(dt, column, data))
     else:
         cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
-        sql_data = (data, host_name, latest_dt.strftime(DATETIME_FORMAT))
-        print("Updating existing row, {}, {}={}".format(latest_dt, column, data))
+        sql_data = (data, host_name, latest[0].strftime(DATETIME_FORMAT))
+        print("Updating existing row, {}, {}={}".format(latest[0], column, data))
 
     try:
         db_execute(cmd, sql_data)
