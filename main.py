@@ -1,18 +1,18 @@
 from paho.mqtt.client import Client
 from multiprocessing import Queue
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import sys
-import sqlite3
 from pathlib import Path
+import mysql.connector
 
 
 global database, SUBS
 
 DATABASE_PATH = Path("/var/local/mqtt_logger/database.sqlite")
 COMMIT_INTERVAL = 10 # minutes
-DEBUG_PRINT_SQL = False
+DEBUG_PRINT_SQL = True
 """Topics to ignore, n matches any root topic.
 This allows ignoring relay/0/set coming from any root topic (any device)."""
 IGNORE_TOPICS = lambda root:(
@@ -31,43 +31,20 @@ host(
     MAC         VARCHAR(17),
     RSSI        INT
 )""",
-"""CREATE TABLE IF NOT EXISTS 
-state(
-    datetime    DATETIME2 PRIMARY KEY,
+"""CREATE TABLE IF NOT EXISTS
+stat(
+    datetime    DATETIME PRIMARY KEY,
     host_name   VARCHAR(128),
     state       BOOLEAN,
-    FOREIGN KEY (host_name) REFERENCES host(name)
-)""",
-"""CREATE TABLE IF NOT EXISTS
-current(
-    datetime    DATETIME2 PRIMARY KEY,
-    host_name   VARCHAR(128),
     current     DECIMAL,
-    FOREIGN KEY (host_name) REFERENCES host(name)
-)""",
-"""CREATE TABLE IF NOT EXISTS
-voltage(
-    datetime    DATETIME2 PRIMARY KEY,
-    host_name   VARCHAR(128),
     voltage     DECIMAL,
-    FOREIGN KEY (host_name) REFERENCES host(name)
-)""",
-"""CREATE TABLE IF NOT EXISTS
-power(
-    datetime    DATETIME2 PRIMARY KEY,
-    host_name   VARCHAR(128),
     power       DECIMAL,
-    FOREIGN KEY (host_name) REFERENCES host(name)
-)""",
-"""CREATE TABLE IF NOT EXISTS
-energy(
-    datetime    DATETIME2 PRIMARY KEY,
-    host_name   VARCHAR(128),
     energy      DECIMAL,
     FOREIGN KEY (host_name) REFERENCES host(name)
 )"""]
 
 last_commit = datetime.now()
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 
 """
 The topics for all the SQL table columns, same order as the table creation command above.
@@ -89,19 +66,22 @@ energy      float
 """
 
 
-def open_database(path: str):
-    database = sqlite3.connect(path)
+def open_database(user: str, password: str):
+    global database
+    database = mysql.connector.connect(host="127.0.0.1", user=user, passwd=password, database="mqtt_logger")
+    cursor = database.cursor()
     for create_table in CREATE_TABLES:
-        database.execute(create_table)
+        db_execute(create_table)
     database.commit()
-    return database
 
 
 def close_database():
     global database
 
-    database.commit()
-    database.close()
+    try:
+        database.commit()
+        database.close()
+    except NameError: pass
 
 
 def on_connect(client, userdata, flags, rc):
@@ -126,7 +106,7 @@ class Message:
         self.datetime = datetime.now()
        
     def datetime_str(self):
-        return self.datetime.strftime("%Y-%m-%d %H:%M:%S.%f")
+        return self.datetime.strftime(DATETIME_FORMAT)
 
 
 def on_message(client, userdata, msg):
@@ -139,23 +119,65 @@ def on_message(client, userdata, msg):
         messages_in.put(Message(msg))
 
 
-def db_execute(cmd, data):
+def db_execute(cmd, data=None):
     global database
+    cursor = database.cursor()
     if DEBUG_PRINT_SQL:
         print(cmd, data)
-    database.execute(cmd, data)
+    if data is not None:
+        cursor.execute(cmd, data)
+    else:
+        cursor.execute(cmd)
+    return cursor
 
 
 def host_update(host_name: str, column: str, data):
-    cmd = "INSERT OR IGNORE INTO host(name) VALUES(?)"
+    cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
     db_execute(cmd, (host_name,))
-    cmd = "UPDATE host SET {}=? WHERE name=?".format(column)
-    db_execute(cmd, (data, host_name))
+    if column is not None:
+        cmd = "UPDATE host SET {}=%s WHERE name=%s".format(column)
+        db_execute(cmd, (data, host_name))
 
 
-def update(table: str, datetime: datetime, host_name: str, column: str, data):
-    cmd = "INSERT INTO {}(datetime, host_name, {}) VALUES(?, ?, ?)".format(table, column)
-    db_execute(cmd, (datetime, host_name, data))
+def ignore_data(host_name, column, data):
+    cmd = "SELECT MAX(datetime), {0} FROM {0}".format(column)
+    if data != 0:
+        return False
+
+    res = db_execute(cmd)
+    res = res.fetchone()
+    if res[1] == data:
+        print("Ignoring data {}:{} because it is the same as the last recorded value of 0".format(column, data))
+        return True
+    return False
+
+
+def get_latest_row(host_name):
+    cmd = "SELECT datetime, state, current, voltage, power, energy FROM stat WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
+    res = db_execute(cmd, (host_name,))
+    res = res.fetchone()
+    return res
+
+
+def update_stat(dt: datetime, host_name: str, column: str, data):
+    if ignore_data(host_name, column, data):
+        return
+
+    latest = get_latest_row(host_name)
+    latest_dt = latest[0]
+    
+    if latest is None or latest_dt < dt - timedelta(seconds=3) or latest_dt > dt + timedelta(seconds=3):
+        cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
+        data = (data, host_name, dt.strftime(DATETIME_FORMAT))
+    else:
+        cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
+        data = (data, host_name, latest_dt.strftime(DATETIME_FORMAT))
+
+    try:
+        db_execute(cmd, data)
+    except mysql.connector.errors.IntegrityError as e:
+        host_update(host_name, None, None)
+        db_execute(cmd, data)
 
 
 def periodic_commit():
@@ -183,19 +205,19 @@ def save_message(msg):
         host_update(msg.root, "RSSI", msg.payload)
 
     elif msg.topic == "relay/0":
-        update("state", msg.datetime_str(), msg.root, "state",
+        update_stat(msg.datetime, msg.root, "state",
                 True if msg.payload == '1' else False)
     elif msg.topic == "current":
-        update("current", msg.datetime_str(), msg.root, "current",
+        update_stat(msg.datetime, msg.root, "current",
                 float(msg.payload))
     elif msg.topic == "voltage":
-        update("voltage", msg.datetime_str(), msg.root, "voltage",
+        update_stat(msg.datetime, msg.root, "voltage",
                 float(msg.payload))
     elif msg.topic == "power":
-        update("power", msg.datetime_str(), msg.root, "power",
+        update_stat(msg.datetime, msg.root, "power",
                 float(msg.payload))
     elif msg.topic == "energy":
-        update("energy", msg.datetime_str(), msg.root, "energy",
+        update_stat(msg.datetime, msg.root, "energy",
                 float(msg.payload))
     periodic_commit()
 
@@ -211,6 +233,7 @@ def loop():
 
 def read_info(path):
     data = json.loads(open(path, 'r').read())
+    data = (data['mqtt'], data['sql'])
     return data
 
 
@@ -226,15 +249,15 @@ def main():
     if not Path("secret.json").exists():
         raise Exception("Need to create secret.json as stated in the README.md")
 
-    creds, host = read_info("secret.json")
+    (mqtt_creds, mqtt_host), sql_creds = read_info("secret.json")
 
-    if creds[0] != "" and creds[1] != "":
-        client.username_pw_set(*creds)
+    if mqtt_creds[0] != "" and mqtt_creds[1] != "":
+        client.username_pw_set(*mqtt_creds)
 
-    client.connect(*host, 60)
+    client.connect(*mqtt_host, 60)
 
     try:
-        database = open_database(DATABASE_PATH)
+        open_database(*sql_creds)
         client.loop_start()
         loop()
     except KeyboardInterrupt: pass
@@ -242,7 +265,6 @@ def main():
         client.disconnect()
         close_database()
         
-
 
 if __name__ == '__main__':
     main()
