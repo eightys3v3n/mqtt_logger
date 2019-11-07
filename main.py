@@ -35,10 +35,10 @@ stat(
     datetime    DATETIME PRIMARY KEY,
     host_name   VARCHAR(128),
     state       BOOLEAN,
-    current     DECIMAL,
-    voltage     DECIMAL,
-    power       DECIMAL,
-    energy      DECIMAL,
+    current     DECIMAL(30,15),
+    voltage     DECIMAL(30,15),
+    power       DECIMAL(30,15),
+    energy      DECIMAL(30,15),
     FOREIGN KEY (host_name) REFERENCES host(name)
 )"""]
 
