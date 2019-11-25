@@ -39,7 +39,7 @@ def get_entries(user, password, host="PhoneCharger"):
 
 
 def plot(x, y):
-    output_file("/tmp/plot.html", mode="inline")
+    output_file("plot.html", mode="inline")
     p = figure(title="Power Usage",
                x_axis_label="Date/Time",
                y_axis_label="Power (W)",
