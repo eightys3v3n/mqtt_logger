@@ -32,14 +32,15 @@ host(
 )""",
 """CREATE TABLE IF NOT EXISTS
 stat(
-    datetime    DATETIME PRIMARY KEY,
-    host_name   VARCHAR(128),
+    datetime    DATETIME NOT NULL,
+    host_name   VARCHAR(128) NOT NULL,
     state       BOOLEAN,
     current     DECIMAL(30,15),
     voltage     DECIMAL(30,15),
     power       DECIMAL(30,15),
     energy      DECIMAL(30,15),
-    FOREIGN KEY (host_name) REFERENCES host(name)
+    FOREIGN KEY (host_name) REFERENCES host(name),
+    PRIMARY KEY (datetime, host_name)
 )"""]
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -71,6 +72,14 @@ def open_database(user: str, password: str):
     for create_table in CREATE_TABLES:
         db_execute(create_table)
     database.commit()
+
+
+def get_supported_stats():
+    global database
+    cursor = database.cursor()
+    cursor.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'stat'")
+    stats = tuple(c[0] for c in cursor.fetchall())
+    return stats
 
 
 def close_database():
@@ -148,10 +157,11 @@ def get_last_state(host_name):
     cmd = "SELECT state FROM stat WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
-    if len(res) == 1:
+    
+    if res is not None and len(res) == 1:
         return res[0]
     else:
-        return Nnoe
+        return None
 
 
 def carry_last_state(host_name: str, dt: str):
@@ -162,22 +172,34 @@ def carry_last_state(host_name: str, dt: str):
 
 
 def update_stat(dt: datetime, host_name: str, column: str, data):
-    latest = get_latest_row(host_name)
+    global supported_stats
+    if column not in supported_stats:
+        print("Ignoring unsupported stat '{}'".format(column))
+        return
 
+    latest = get_latest_row(host_name)
+    
     if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
+
         cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
         sql_data = (data, host_name, dt.strftime(DATETIME_FORMAT))
-        print("Adding a new row, {}, {}={}".format(dt, column, data))
+    
+        print("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
+    
     else:
         cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
         sql_data = (data, host_name, latest[0].strftime(DATETIME_FORMAT))
-        print("Updating existing row, {}, {}={}".format(latest[0], column, data))
+    
+        print("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
     try:
         db_execute(cmd, sql_data)
     except mysql.connector.errors.IntegrityError as e:
-        host_update(host_name, None, None)
-        db_execute(cmd, sql_data)
+        if str(e).startswith("1062"):
+            print("Tried to add this entry twice?", e, "\n", cmd, sql_data)
+        else:
+            host_update(host_name, None, None)
+            db_execute(cmd, sql_data)
 
     if column != "state":
         carry_last_state(host_name, sql_data[-1])
@@ -232,6 +254,7 @@ def read_info(path):
 def main():
     global database
     global messages_in
+    global supported_stats
     messages_in = Queue()
 
     client = Client()
@@ -250,6 +273,8 @@ def main():
 
     try:
         open_database(*sql_creds)
+        supported_stats = get_supported_stats()
+        
         client.loop_start()
         loop()
     except KeyboardInterrupt: pass
