@@ -9,3 +9,4 @@ If there is no authentication leave username and password empty.
 
 ## Todo
 - Collect all readings made in a particular time period into a single row. The way it is currently recorded it is hard to get all the data points from a device at a particular time. (I think this might be done)
+- Make the SQL tables and MQTT topics to record, modular. Then extra modules can be added instead of additional projects started.
