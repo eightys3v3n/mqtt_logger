@@ -10,7 +10,6 @@ import mysql.connector
 
 global database, SUBS
 
-DATABASE_PATH = Path("/var/local/mqtt_logger/database.sqlite")
 DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
 This allows ignoring relay/0/set coming from any root topic (any device)."""
