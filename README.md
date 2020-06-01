@@ -8,5 +8,4 @@ If there is no authentication leave username and password empty.
 
 
 ## Todo
-- Switch over to MySQL from SQLite
-- Collect all readings made in a particular time period into a single row. The way it is currently recorded it is hard to get all the data points from a device at a particular time.
+- Collect all readings made in a particular time period into a single row. The way it is currently recorded it is hard to get all the data points from a device at a particular time. (I think this might be done)
