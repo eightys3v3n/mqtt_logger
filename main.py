@@ -5,11 +5,13 @@ from datetime import datetime, timedelta
 import json
 import sys
 from pathlib import Path
+from db_helpers import *
 import mysql.connector
 
 
 global database, SUBS
 
+CONFIG_FILE = "secret.json" # MQTT host & creds, SQL creds
 DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
 This allows ignoring relay/0/set coming from any root topic (any device)."""
@@ -64,13 +66,13 @@ energy      float
 """
 
 
-def open_database(user: str, password: str):
-    global database
-    database = mysql.connector.connect(host="127.0.0.1", user=user, passwd=password, database="mqtt_logger", autocommit=True)
-    cursor = database.cursor()
-    for create_table in CREATE_TABLES:
-        db_execute(create_table)
-    database.commit()
+# def open_database(user: str, password: str):
+#     global database
+#     database = mysql.connector.connect(host="127.0.0.1", user=user, passwd=password, database="mqtt_logger", autocommit=True)
+#     cursor = database.cursor()
+#     for create_table in CREATE_TABLES:
+#         db_execute(create_table)
+#     database.commit()
 
 
 def get_supported_stats():
@@ -81,13 +83,13 @@ def get_supported_stats():
     return stats
 
 
-def close_database():
-    global database
+# def close_database():
+#     global database
 
-    try:
-        database.commit()
-        database.close()
-    except NameError: pass
+#     try:
+#         database.commit()
+#         database.close()
+#     except NameError: pass
 
 
 def on_connect(client, userdata, flags, rc):
@@ -125,36 +127,36 @@ def on_message(client, userdata, msg):
         messages_in.put(Message(msg))
 
 
-def db_execute(cmd, data=None):
-    global database
-    cursor = database.cursor()
-    if DEBUG_PRINT_SQL:
-        print(cmd, data)
-    if data is not None:
-        cursor.execute(cmd, data)
-    else:
-        cursor.execute(cmd)
-    return cursor
+# def db_execute(cmd, data=None):
+#     global database
+#     cursor = database.cursor()
+#     if DEBUG_PRINT_SQL:
+#         print(cmd, data)
+#     if data is not None:
+#         cursor.execute(cmd, data)
+#     else:
+#         cursor.execute(cmd)
+#     return cursor
 
 
 def host_update(host_name: str, column: str, data):
     cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
-    db_execute(cmd, (host_name,))
+    db_execute(database, cmd, (host_name,))
     if column is not None:
         cmd = "UPDATE host SET {}=%s WHERE name=%s".format(column)
-        db_execute(cmd, (data, host_name))
+        db_execute(database, cmd, (data, host_name))
 
 
 def get_latest_row(host_name):
     cmd = "SELECT datetime, state, current, voltage, power, energy FROM stat WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
-    res = db_execute(cmd, (host_name,))
+    res = db_execute(database, cmd, (host_name,))
     res = res.fetchone()
     return res
 
 
 def get_last_state(host_name):
     cmd = "SELECT state FROM stat WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
-    res = db_execute(cmd, (host_name,))
+    res = db_execute(database, cmd, (host_name,))
     res = res.fetchone()
     
     if res is not None and len(res) == 1:
@@ -166,7 +168,7 @@ def get_last_state(host_name):
 def carry_last_state(host_name: str, dt: str):
     last_state = get_last_state(host_name)
     cmd = "UPDATE stat SET state=%s WHERE host_name=%s AND datetime=%s"
-    db_execute(cmd, (last_state, host_name, dt))
+    db_execute(database, cmd, (last_state, host_name, dt))
     print("Carried last state")
 
 
@@ -192,13 +194,13 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         print("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
     try:
-        db_execute(cmd, sql_data)
+        db_execute(database, cmd, sql_data)
     except mysql.connector.errors.IntegrityError as e:
         if str(e).startswith("1062"):
             print("Tried to add this entry twice?", e, "\n", cmd, sql_data)
         else:
             host_update(host_name, None, None)
-            db_execute(cmd, sql_data)
+            db_execute(database, cmd, sql_data)
 
     if column != "state":
         carry_last_state(host_name, sql_data[-1])
@@ -244,9 +246,14 @@ def loop():
         save_message(msg)
 
 
-def read_info(path):
+def read_conn_details(path):
+    """Returns ((mqtt_creds, mqtt_host), sql_creds)"""
+    if not Path(CONFIG_FILE).exists():
+        raise Exception("Need to create secret.json as stated in the README.md")
+    
     data = json.loads(open(path, 'r').read())
     data = (data['mqtt'], data['sql'])
+
     return data
 
 
@@ -263,7 +270,7 @@ def main():
     if not Path("secret.json").exists():
         raise Exception("Need to create secret.json as stated in the README.md")
 
-    (mqtt_creds, mqtt_host), sql_creds = read_info("secret.json")
+    (mqtt_creds, mqtt_host), sql_creds = read_conn_details("secret.json")
 
     if mqtt_creds[0] != "" and mqtt_creds[1] != "":
         client.username_pw_set(*mqtt_creds)
@@ -271,7 +278,7 @@ def main():
     client.connect(*mqtt_host, 60)
 
     try:
-        open_database(*sql_creds)
+        database = open_database(*sql_creds)
         supported_stats = get_supported_stats()
         
         client.loop_start()
@@ -279,7 +286,7 @@ def main():
     except KeyboardInterrupt: pass
     finally:
         client.disconnect()
-        close_database()
+        close_database(database)
         
 
 if __name__ == '__main__':
