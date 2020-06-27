@@ -107,7 +107,7 @@ def carry_last_state(host_name: str, dt: str):
     last_state = get_last_state(host_name)
     cmd = "UPDATE stat SET state=%s WHERE host_name=%s AND datetime=%s"
     db_execute(cmd, (last_state, host_name, dt))
-    print("Carried last state")
+    logger.debug("Carried last state")
 
 
 def update_stat(dt: datetime, host_name: str, column: str, data):
