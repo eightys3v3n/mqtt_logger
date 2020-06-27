@@ -6,6 +6,7 @@ from main import DATETIME_FORMAT
 import logging
 
 
+logger = logging.getLogger(__name__)
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
@@ -150,7 +151,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
 
 def save_message(msg):
     """Handles how to save the msg contents into the SQLite database."""
-    logging.debug("Received message '{}':'{}'".format(msg.topic, msg.payload))
+    logger.debug("Processing message '{}':'{}'".format(msg.topic, msg.payload))
     
     # handle msg.root
     if msg.topic == "ip":

@@ -13,6 +13,7 @@ import modules as __modules__
 
 global database, SUBS
 
+mqtt_logger = None
 CONFIG_FILE = "secret.json" # MQTT host & creds, SQL creds
 DEBUG_PRINT_SQL = False
 """Topics to ignore, n matches any root topic.
@@ -20,32 +21,9 @@ This allows ignoring relay/0/set coming from any root topic (any device)."""
 IGNORE_TOPICS = lambda root:(
     root+"/relay/0/set",
 )
-
-"""Command to create the database, this is run every time the database is opened.
-So you need the [IF NOT EXISTS] part."""
-CREATE_TABLES = [
-"""CREATE TABLE IF NOT EXISTS
-host(
-    name        VARCHAR(128) PRIMARY KEY,
-    IP          VARCHAR(15),
-    description VARCHAR(256),
-    SSID        VARCHAR(64),
-    MAC         VARCHAR(17),
-    RSSI        INT
-)""",
-"""CREATE TABLE IF NOT EXISTS
-stat(
-    datetime    DATETIME NOT NULL,
-    host_name   VARCHAR(128) NOT NULL,
-    state       BOOLEAN,
-    current     DECIMAL(30,15),
-    voltage     DECIMAL(30,15),
-    power       DECIMAL(30,15),
-    energy      DECIMAL(30,15),
-    FOREIGN KEY (host_name) REFERENCES host(name),
-    PRIMARY KEY (datetime, host_name)
-)"""]
-
+# This controls the number of messages that will be held if the database is taking too long.
+# After this is exhausted new messages will not be logged until the processor frees up a spot.
+MESSAGE_QUEUE_SIZE = 1024
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -61,10 +39,11 @@ def modules():
 
 def on_connect(client, userdata, flags, rc):
     if rc != 0:
-        print(f"Connection failed: {rc}")
+        mqtt_logger.warning(f"Connection failed: {rc}")
     else:
-        print("Connected")
+        mqtt_logger.info("Connected")
         client.subscribe("#")
+        mqtt_logger.debug("Subscribed to '#'")
     return rc
 
 
@@ -87,11 +66,11 @@ class Message:
 def on_message(client, userdata, msg):
     global messages_in
 
-    if msg.topic in IGNORE_TOPICS(msg.topic.split('/')[0]):
-        print(f"Ignoring msg from topic {msg.topic}")
-    else:
-        #print("{}: {}".format(msg.topic, str(msg.payload.decode())))
-        messages_in.put(Message(msg))
+    mqtt_logger.debug("Received message '{}':'{}'".format(msg.topic, str(msg.payload.decode())))
+    try:
+        messages_in.put(Message(msg), block=False)
+    except Queue.Full:
+        mqtt_logger.warning("Message queue appears to be full, dropping message")
 
 
 def save_message(msg):
@@ -112,7 +91,6 @@ def loop():
 
     while True:
         msg = messages_in.get()
-        logging.debug("Logging message: {}:{}".format(msg.topic, msg.payload))
         save_message(msg)
 
 
@@ -128,10 +106,13 @@ def read_conn_details(path):
 
 
 def main():
-    global messages_in
+    global messages_in, logger, mqtt_logger
 
     logging.basicConfig(level=logging.DEBUG)
-    messages_in = Queue()
+    
+    mqtt_logger = logging.getLogger("mqtt")
+    
+    messages_in = Queue(maxsize=MESSAGE_QUEUE_SIZE)
     client = Client()
     client.on_connect = on_connect
     client.on_message = on_message
