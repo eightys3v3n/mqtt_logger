@@ -58,7 +58,7 @@ def main():
     config = json.loads(open('secret.json', 'r').read())
     config = config['sql']
 
-    for host in ("PhoneCharger", "UpstairsFridge"):
+    for host in ("Microwave",):
         print("Plotting {}".format(host))
         entries = get_entries(*config, host)
         print("{} entries to plot".format(len(entries)))
