@@ -114,7 +114,7 @@ def read_conn_details(path):
 def main():
     global messages_in, logger, mqtt_logger
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     
     mqtt_logger = logging.getLogger("mqtt")
     mqtt_logger.setLevel(logging.WARNING)
