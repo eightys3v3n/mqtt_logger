@@ -34,7 +34,8 @@ stat(
 ACCEPTED_TOPIC_PREFIXES = [
     "#",
 ]
-"""Sub-topics to ignore where `root` is the device name or identifier. So this will ignore anything/relay/0/set."""
+"""Sub-topics to ignore where `root` is the device name or identifier. So this will ignore anything/relay/0/set.
+This will also ignore any topic that starts with the given string. So 'Microwave/' will ignore anything under the Microwave root."""
 IGNORE_TOPICS = lambda root:(
     root+"/relay/0/set",
 )
@@ -46,7 +47,7 @@ def init(database):
         db_execute(database, create_table)
 
 
-def host_update(database, host_name: str, column: str, data):
+def host_update(host_name: str, column: str, data):
     """An example function showing how to access the database using db_helpers.db_execute()."""
     cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
     db_execute(database, cmd, (host_name,))
