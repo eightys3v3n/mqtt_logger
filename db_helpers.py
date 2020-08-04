@@ -13,20 +13,20 @@ def open_database(user: str, password: str):
         close_database()
         
     host = "127.0.0.1"
-    logging.info("Connecting to SQL database {}@{}".format(user, host))
+    logger.info("Connecting to SQL database {}@{}".format(user, host))
     database = connect(host=host, user=user, passwd=password, database="mqtt_logger", autocommit=True)
 
 
 def close_database():
     global database
     
-    logging.info("Closing database connection...")
+    logger.info("Closing database connection...")
     try:
         database.commit()
         database.close()
     except NameError: pass
     finally:
-        logging.info("Closed database connection.")
+        logger.info("Closed database connection.")
 
 
 def db_execute(cmd, data=None):
