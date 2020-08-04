@@ -7,7 +7,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
