@@ -10,8 +10,7 @@ ACCEPTED_TOPIC_ROOTS = [
 ]
 """Sub-topics to ignore where `root` is the device name or identifier. So this will ignore anything/relay/0/set."""
 IGNORE_TOPICS = lambda root:(
-    "Microwave/",
-    # "PhoneCharger/",
+    "outlets/",
 )
 
 
