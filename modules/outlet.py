@@ -7,6 +7,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
@@ -34,8 +35,8 @@ stat(
 
 
 """Topics to accept and sub topics to ignore"""
-ACCEPTED_TOPIC_PREFIXES = [
-    "#",
+ACCEPTED_TOPIC_ROOTS = [
+    "outlets",
 ]
 IGNORE_TOPICS = lambda root:(
     root+"/relay/0/set",
@@ -142,7 +143,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         if str(e).startswith("1062"):
             print("Tried to add this entry twice?", e, "\n", cmd, sql_data)
         else:
-            host_update(database, host_name, None, None)
+            host_update(host_name, None, None)
             db_execute(cmd, sql_data)
 
     if column != "state":
@@ -151,32 +152,34 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
 
 def save_message(msg):
     """Handles how to save the msg contents into the SQLite database."""
-    logger.debug("Processing message '{}':'{}'".format(msg.topic, msg.payload))
+    host_name = msg.topic.split('/')[0]
+    topic = '/'.join(msg.topic.split('/')[1:])
     
-    # handle msg.root
-    if msg.topic == "ip":
-        host_update(msg.root, "IP", msg.payload)
-    elif msg.topic == "desc":
-        host_update(msg.root, "description", msg.payload)
-    elif msg.topic == "ssid":
-        host_update(msg.root, "SSID", msg.payload)
-    elif msg.topic == "mac":
-        host_update(msg.root, "MAC", msg.payload)
-    elif msg.topic == "rssi":
-        host_update(msg.root, "RSSI", msg.payload)
+    logger.debug("Processing message '{}':'{}'".format(topic, msg.payload))
 
-    elif msg.topic == "relay/0":
-        update_stat(msg.datetime, msg.root, "state",
+    if topic == "ip":
+        host_update(host_name, "IP", msg.payload)
+    elif topic == "desc":
+        host_update(host_name, "description", msg.payload)
+    elif topic == "ssid":
+        host_update(host_name, "SSID", msg.payload)
+    elif topic == "mac":
+        host_update(host_name, "MAC", msg.payload)
+    elif topic == "rssi":
+        host_update(host_name, "RSSI", msg.payload)
+
+    elif topic == "relay/0":
+        update_stat(msg.datetime, host_name, "state",
                 True if msg.payload == '1' else False)
-    elif msg.topic == "current":
-        update_stat(msg.datetime, msg.root, "current",
+    elif topic == "current":
+        update_stat(msg.datetime, host_name, "current",
                 float(msg.payload))
-    elif msg.topic == "voltage":
-        update_stat(msg.datetime, msg.root, "voltage",
+    elif topic == "voltage":
+        update_stat(msg.datetime, host_name, "voltage",
                 float(msg.payload))
-    elif msg.topic == "power":
-        update_stat(msg.datetime, msg.root, "power",
+    elif topic == "power":
+        update_stat(msg.datetime, host_name, "power",
                 float(msg.payload))
-    elif msg.topic == "energy":
-        update_stat(msg.datetime, msg.root, "energy",
+    elif topic == "energy":
+        update_stat(msg.datetime, host_name, "energy",
                 float(msg.payload))
