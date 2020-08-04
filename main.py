@@ -15,12 +15,6 @@ global database, SUBS
 
 mqtt_logger = None
 CONFIG_FILE = "secret.json" # MQTT host & creds, SQL creds
-DEBUG_PRINT_SQL = False
-"""Topics to ignore, n matches any root topic.
-This allows ignoring relay/0/set coming from any root topic (any device)."""
-IGNORE_TOPICS = lambda root:(
-    root+"/relay/0/set",
-)
 # This controls the number of messages that will be held if the database is taking too long.
 # After this is exhausted new messages will not be logged until the processor frees up a spot.
 MESSAGE_QUEUE_SIZE = 1024
@@ -62,6 +56,9 @@ class Message:
     def datetime_str(self):
         return self.datetime.strftime(DATETIME_FORMAT)
 
+    def __str__(self):
+        return "'{}'/'{}' = '{}'".format(self.root, self.topic, self.payload)
+    
 
 def on_message(client, userdata, msg):
     global messages_in
@@ -75,23 +72,32 @@ def on_message(client, userdata, msg):
 
 def save_message(msg):
     """Handles how to save the msg contents into the SQLite database."""
-    logging.debug("Saving message '{}:{}'".format(msg.topic, msg.payload))
+    logging.debug("Saving message '{}/{}:{}'".format(msg.root, msg.topic, msg.payload))
     for m in modules():
-        if '#' in m.ACCEPTED_TOPIC_PREFIXES:
-            logging.debug("Sending message to module '{}'".format(m.__name__.replace("modules.","")))
-            m.save_message(msg)
+        logging.debug(" Checking module '{}'".format(m.__name__.replace("modules.","")))
+
+        if '#' in m.ACCEPTED_TOPIC_ROOTS:
+            for ignore in m.IGNORE_TOPICS(msg.root):
+                if ignore == "{}/{}".format(msg.root, msg.topic):
+                    logging.debug("  Ignoring msg with equals rule '{}'".format(ignore))
+                    break
+                if "{}/{}".format(msg.root, msg.topic).startswith(ignore):
+                    logging.debug("  Ignoring msg with starts with rule '{}'".format(ignore))
+                    break
+            else:
+                logging.debug("  Sending message '{}'".format(msg))
+                m.save_message(msg)
         else:
-            for t in m.ACCEPTED_TOPICS:
-                if m.topic.startswith(t):
-                    logging.debug("Sending message to module '{}'".format(m.__name__.replace("modules.","")))
+            for t in m.ACCEPTED_TOPIC_ROOTS:
+                if msg.root == t:
+                    logging.debug("  Sending message '{}'".format(msg))
                     m.save_message(msg)
 
 def loop():
     global messages_in
 
     while True:
-        msg = messages_in.get()
-        save_message(msg)
+        save_message(messages_in.get())
 
 
 def read_conn_details(path):
@@ -111,6 +117,7 @@ def main():
     logging.basicConfig(level=logging.DEBUG)
     
     mqtt_logger = logging.getLogger("mqtt")
+    mqtt_logger.setLevel(logging.WARNING)
     
     messages_in = Queue(maxsize=MESSAGE_QUEUE_SIZE)
     client = Client()
