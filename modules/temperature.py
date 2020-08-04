@@ -55,6 +55,15 @@ def save_message(msg: Message):
     """This is passed every relevent message that MQTT receives."""
     host_name = msg.topic.split('/')[0]
     temp = float(msg.payload)
+
+    """ This is improper and leads to inaccuracies when starting the client.
+    MQTT will resend messages for the last so many minutes if they weren't delivered.
+    So if this was stopped for a day, a bunch of out of date messages will come in at the
+    same time and be given the same date and time.
+    Ideally we would chagne the temperature monitor so the data it sends is a string containing
+    the measurement date and time. However, then we are also relying on the datetime on the device.
+    We could also change the QOS of the monitor device so the server Doesn't keep stagnent messages
+    Good enough for now though."""
     dt = datetime.now()
 
     temp_update(dt, host_name, temp)
