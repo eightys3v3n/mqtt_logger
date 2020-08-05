@@ -31,7 +31,12 @@ IGNORE_TOPICS = lambda root:tuple()
 """Hard coded locations of the temperature monitors. The alternative was keeping a record somewhere else
 (hard to use SQL statements to select locations). Or reprogramming each unit when moving it (not ideal)"""
 LOCATIONS = {
-    'temp4': "Terrence's Room"
+	'temp1': "Calibration box",
+	'temp2': "Calibration box: battery",
+	'temp3': "Calibration box",
+    'temp4': "Calibration box",
+	'temp5': "Calibration box: battery",
+	'temp6': "Calibration box",
 }
 
 
