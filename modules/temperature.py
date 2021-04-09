@@ -31,12 +31,12 @@ IGNORE_TOPICS = lambda root:tuple()
 """Hard coded locations of the temperature monitors. The alternative was keeping a record somewhere else
 (hard to use SQL statements to select locations). Or reprogramming each unit when moving it (not ideal)"""
 LOCATIONS = {
-	'temp1': "Calibration box",
-	'temp2': "Calibration box: battery",
-	'temp3': "Calibration box",
-    'temp4': "Calibration box",
-	'temp5': "Calibration box: battery",
-	'temp6': "Calibration box",
+	'temp1': "",
+	'temp2': "Study room at sitting level",
+	'temp3': "Dining room at floor level",
+    'temp4': "Terrences room on phone charging table",
+	'temp5': "",
+	'temp6': "Study room at floor level",
 }
 
 
@@ -53,7 +53,7 @@ def temp_update(dt: datetime, host_name: str, temperature: float):
         location = "Unknown"
         
     cmd = "INSERT INTO {}(datetime, host_name, temperature, location) VALUES (%s, %s, %s, %s)".format(DATABASE_NAME)
-    db_execute(cmd, (dt, host_name, temperature, location,))
+    db_execute(cmd, (dt.strftime("%Y-%m-%d %H-%M-%S.%f"), host_name, temperature, location,))
     
 
 def save_message(msg: Message):
