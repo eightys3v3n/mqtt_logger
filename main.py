@@ -75,11 +75,6 @@ def save_message(msg):
             if msg.topic.startswith(t):
                 logger.debug("Sending message to module '{}'".format(m))
                 m.save_message(msg)
-        else:
-            for t in m.ACCEPTED_TOPIC_ROOTS:
-                if msg.root == t:
-                    logging.debug("  Sending message '{}'".format(msg))
-                    m.save_message(msg)
 
 def loop():
     global messages_in
