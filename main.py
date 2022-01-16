@@ -26,11 +26,11 @@ def modules():
 
 def on_connect(client, userdata, flags, rc):
     if rc != 0:
-        mqtt_logger.warning(f"Connection failed: {rc}")
+        logger.warning(f"Connection failed: {rc}")
     else:
-        mqtt_logger.info("Connected")
+        logger.info("Connected")
         client.subscribe("#")
-        mqtt_logger.debug("Subscribed to '#'")
+        logger.debug("Subscribed to '#'")
     return rc
 
 
@@ -60,7 +60,7 @@ def on_message(client, userdata, msg):
     try:
         messages_in.put(Message(msg), block=False)
     except Queue.Full:
-        mqtt_logger.warning("Message queue appears to be full, dropping message")
+        logger.warning("Message queue appears to be full, dropping message")
 
 
 def save_message(msg):
@@ -101,7 +101,7 @@ def read_conn_details(path):
 
 
 def main():
-    global messages_in, logger, mqtt_logger
+    global messages_in
 
     messages_in = Queue()
     client = Client(client_id="Logger {}".format(datetime.now().strftime("%Y%m%d%H%M")))
