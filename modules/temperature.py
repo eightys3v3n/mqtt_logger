@@ -1,13 +1,13 @@
 from db_helpers import db_execute
 from datetime import datetime
 from main import Message
-import logging
+from logging_setup import create_logger
 
 
 """Add the file name to the modules/__init__.py file for it to be used."""
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger = create_logger('Modules.Temperature')
+
 
 DATABASE_NAME = 'temperature'
 """Commands to create the database, this is run every time the database is opened.
@@ -26,6 +26,7 @@ CREATE_TABLES = [
 ACCEPTED_TOPIC_PREFIXES = [
     "temperatures",
 ]
+
 """Hard coded locations of the temperature monitors. The alternative was keeping a record somewhere else
 (hard to use SQL statements to select locations). Or reprogramming each unit when moving it (not ideal)"""
 LOCATIONS = {

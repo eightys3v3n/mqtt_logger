@@ -150,7 +150,10 @@ def get_hostname(topic):
 
 def get_column(topic):
     """Parses the column of the message topic"""
-    return topic.split('/')[-1]
+    column = topic.split('/')[-1]
+    if len(column) == 1:
+        column = topic.split('/')[-2]
+    return column
 
 
 def save_message(msg):
@@ -163,7 +166,9 @@ def save_message(msg):
     column = get_column(msg.topic)
     logger.debug(f"  Column {column}")
 
-    if column == "ip":
+    if column in ('status', 'app','version','board','host','uptime','datetime','freeheap','loadavg','vcc','relay','reactive','apparent','factor','set'):
+        pass
+    elif column == "ip":
         host_update(host_name, "IP", msg.payload)
     elif column == "desc":
         host_update(host_name, "description", msg.payload)
