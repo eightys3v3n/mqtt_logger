@@ -2,6 +2,7 @@ from paho.mqtt.client import Client
 from multiprocessing import Queue
 from collections import defaultdict
 from datetime import datetime, timedelta
+import modules as __modules__
 import json
 import sys
 from pathlib import Path
