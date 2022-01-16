@@ -23,11 +23,9 @@ CREATE_TABLES = [
 
 
 """Topics to accept, # means everything."""
-ACCEPTED_TOPIC_ROOTS = [
+ACCEPTED_TOPIC_PREFIXES = [
     "temperatures",
 ]
-"""Sub-topics to ignore where `root` is the device name or identifier. So this will ignore anything/relay/0/set."""
-IGNORE_TOPICS = lambda root:tuple()
 """Hard coded locations of the temperature monitors. The alternative was keeping a record somewhere else
 (hard to use SQL statements to select locations). Or reprogramming each unit when moving it (not ideal)"""
 LOCATIONS = {
