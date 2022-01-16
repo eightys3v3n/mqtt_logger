@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from multiprocessing import Queue
 from db_helpers import db_execute
+<<<<<<< HEAD
 from mysql.connector.errors import *
 from main import DATETIME_FORMAT
 import logging
@@ -8,6 +9,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
+=======
+from logging_setup import create_logger
+
+
+
+logger = create_logger('Modules.Outlet')
+
+>>>>>>> e1a9429 (implemented logging from another project with config file)
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
@@ -119,7 +128,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         return
         
     if column not in supported_stats:
-        print("Ignoring unsupported stat '{}'".format(column))
+        logger.debug("Ignoring unsupported stat '{}'".format(column))
         return
 
     latest = get_latest_row(host_name)
@@ -129,19 +138,19 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
         sql_data = (data, host_name, dt.strftime(DATETIME_FORMAT))
     
-        print("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
+        logger.debug("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
     
     else:
         cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
         sql_data = (data, host_name, latest[0].strftime(DATETIME_FORMAT))
     
-        print("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
+        logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
     try:
         db_execute(cmd, sql_data)
     except IntegrityError as e:
         if str(e).startswith("1062"):
-            print("Tried to add this entry twice?", e, "\n", cmd, sql_data)
+            logger.debug("Tried to add this entry twice?", e, "\n", cmd, sql_data)
         else:
             host_update(host_name, None, None)
             db_execute(cmd, sql_data)
@@ -152,8 +161,13 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
 
 def save_message(msg):
     """Handles how to save the msg contents into the SQLite database."""
+<<<<<<< HEAD
     host_name = msg.topic.split('/')[0]
     topic = '/'.join(msg.topic.split('/')[1:])
+=======
+    logger.debug("Received message '{}':'{}'".format(msg.topic, msg.payload))
+    return
+>>>>>>> e1a9429 (implemented logging from another project with config file)
     
     logger.debug("Processing message '{}':'{}'".format(topic, msg.payload))
 
