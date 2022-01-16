@@ -95,7 +95,8 @@ def read_conn_details(path):
     data = json.loads(open(path, 'r').read())
     data = (data['mqtt'], data['sql'])
 
-    return data
+    (mqtt_creds, mqtt_host), sql_creds = data
+    return (mqtt_host, mqtt_creds), sql_creds
 
 
 def main():
