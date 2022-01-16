@@ -138,7 +138,7 @@ def loop():
         save_message(messages_in.get())
 =======
         msg = messages_in.get()
-        logger.debug("Logging message: {}:{}".format(msg.topic, msg.payload))
+        logger.info("Logging message at: {}/{}".format(msg.root, msg.topic))
         save_message(msg)
 >>>>>>> e1a9429 (implemented logging from another project with config file)
 
@@ -174,10 +174,13 @@ def main():
     (mqtt_creds, mqtt_host), sql_creds = read_conn_details(CONFIG_FILE)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     logging.info("Connecting to MQTT host: {}".format(mqtt_host))
 =======
     logger.debug("Hello from debug")
     
+=======
+>>>>>>> 9882b72 (File specific log levels)
     logger.info("Connecting to MQTT host: {}".format(mqtt_host))
 >>>>>>> e1a9429 (implemented logging from another project with config file)
     if mqtt_creds[0] != "" and mqtt_creds[1] != "":

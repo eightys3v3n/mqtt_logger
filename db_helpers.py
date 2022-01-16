@@ -2,7 +2,7 @@ from mysql.connector import connect
 from logging_setup import create_logger
 
 
-logger = create_logger('DB_Helpers')
+logger = create_logger('Database')
 
 
 def open_database(user: str, password: str):

@@ -12,6 +12,8 @@ def create_logger(name):
   # Console logger
   c_handler = logging.StreamHandler()
   c_handler.setLevel(config.Logging.terminal_level)
+  if name in config.Logging.logger_specific_log_levels:
+    c_handler.setLevel(config.Logging.logger_specific_log_levels[name])
   c_format = logging.Formatter(config.Logging.terminal_format)
   c_handler.setFormatter(c_format)
 
@@ -27,8 +29,7 @@ def create_logger(name):
   logger.addHandler(f_handler)
 
 
-  if name in config.Logging.logger_specific_log_levels:
-    logger.setLevel(config.Logging.logger_specific_log_levels[name])
+
 
 
   return logger
