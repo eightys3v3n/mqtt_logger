@@ -11,6 +11,4 @@ class Logging:
 
   # log levels specified by logger name. only applies to console, not file logging.
   logger_specific_log_levels = {
-    'Modules.Outlet': logging.INFO,
-    'Database': logging.DEBUG,
   }
