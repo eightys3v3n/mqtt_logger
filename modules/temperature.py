@@ -40,7 +40,7 @@ LOCATIONS = {
 }
 
 
-def init(database):
+def init():
     """This is run once the database is connected. Do anything that needs to be done only once per script execution here."""
     for create_table in CREATE_TABLES:
         db_execute(create_table)
