@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 from db_helpers import *
+import config
 from logging_setup import create_logger
 
 
@@ -34,8 +35,7 @@ def on_connect(client, userdata, flags, rc):
 
 class Message:
     def __init__(self, msg):
-        self.root = msg.topic.split('/')[0]
-        self.topic = "/".join(msg.topic.split('/')[1:])
+        self.topic = msg.topic
         if isinstance(msg.payload, str):
             self.payload = msg.payload
         elif isinstance(msg.payload, bytes):
@@ -45,7 +45,7 @@ class Message:
         self.datetime = datetime.now()
        
     def datetime_str(self):
-        return self.datetime.strftime(DATETIME_FORMAT)
+        return self.datetime.strftime(config.General.DateTimeFormat)
 
     def __str__(self):
         return "'{}'/'{}' = '{}'".format(self.root, self.topic, self.payload)
@@ -63,7 +63,7 @@ def on_message(client, userdata, msg):
 
 
 def save_message(msg):
-    logger.debug("Saving message {} {}/{}:{}".format(msg.datetime, msg.root, msg.topic, msg.payload))
+    logger.debug("Saving message {} {}:{}".format(msg.datetime, msg.topic, msg.payload))
 
     for m in modules():
         if '#' in m.ACCEPTED_TOPIC_PREFIXES:
@@ -71,7 +71,7 @@ def save_message(msg):
             m.save_message(msg)
             continue
         for t in m.ACCEPTED_TOPIC_PREFIXES:
-            if m.topic.startswith(t):
+            if msg.topic.startswith(t):
                 logger.debug("Sending message to module '{}'".format(m))
                 m.save_message(msg)
         else:
@@ -105,7 +105,8 @@ def main():
     client = Client(client_id="Logger {}".format(datetime.now().strftime("%Y%m%d%H%M")))
     client.on_connect = on_connect
     client.on_message = on_message
-    (mqtt_creds, mqtt_host), sql_creds = read_conn_details(CONFIG_FILE)
+
+    (mqtt_host, mqtt_creds), sql_creds = read_conn_details(config.General.SecretFile)
 
     logger.info("Connecting to MQTT host: {}".format(mqtt_host))
 
@@ -117,7 +118,7 @@ def main():
         open_database(*sql_creds)
         for m in modules():
             logger.info("Initiating module {}".format(m.__name__.replace("modules.", "")))
-            m.init(database)
+            m.init()
 
         logger.info("Starting MQTT client...")
         client.loop_start()
@@ -128,7 +129,7 @@ def main():
     finally:
         client.disconnect()
         try:
-            close_database(database)
+            close_database()
         except UnboundLocalError: pass
         
 

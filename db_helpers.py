@@ -5,6 +5,9 @@ from logging_setup import create_logger
 logger = create_logger('Database')
 
 
+database = None
+
+
 def open_database(user: str, password: str):
     global database
 
