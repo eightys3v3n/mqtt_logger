@@ -53,10 +53,10 @@ def save_message(msg: Message):
     value = float(msg.payload)
 
     if isnan(value):
-        logger.warning(f"Received NaN value for {field} from host {host_name}")
+        logger.warning(f"Received NaN value for {field} from host:{host_name}")
         return
 
-    logger.debug("Recording {} to column {} for host {}".format(value, field, host_name))
+    logger.debug("Recording {} to column:{} for host:{}".format(value, field, host_name))
 
     """ This is improper and leads to inaccuracies when starting the client.
     MQTT will resend messages for the last so many minutes if they weren't delivered.
