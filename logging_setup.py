@@ -3,8 +3,8 @@ import config
 
 
 def create_logger(name):
-  justiified_name = name.ljust(config.Logging.logger_name_justify_length)
-  logger = logging.getLogger(justiified_name)
+  justified_name = name.ljust(config.Logging.logger_name_justify_length)
+  logger = logging.getLogger(justified_name)
 
   # Set the level of the entire logger so each handler can correctly set their level.
   logger.setLevel(logging.DEBUG)
@@ -27,9 +27,5 @@ def create_logger(name):
 
   logger.addHandler(c_handler)
   logger.addHandler(f_handler)
-
-
-
-
 
   return logger
