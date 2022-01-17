@@ -36,7 +36,7 @@ class Message:
     def __init__(self, msg):
         self.topic = msg.topic
         if isinstance(msg.payload, str):
-            self.payload = msg.payload
+            self.payload = msg.payload.decode()
         elif isinstance(msg.payload, bytes):
             self.payload = msg.payload.decode()
         else:
@@ -53,7 +53,7 @@ class Message:
 def on_message(client, userdata, msg):
     global messages_in
 
-    logger.debug("Received message '{}':'{}'".format(msg.topic, msg.payload))
+    logger.info("Received message '{}':{}".format(msg.topic, msg.payload.decode()))
 
     try:
         messages_in.put(Message(msg), block=False)
