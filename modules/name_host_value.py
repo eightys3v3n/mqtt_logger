@@ -22,10 +22,10 @@ TABLE_NAMES = ['temperatures', 'relative_humidities', 'total_volatile_organic_co
 """Commands to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part. These are some example commands."""
 CREATE_TABLES = [
-"""CREATE TABLE IF NOT EXISTS {0} (
+"""CREATE TABLE IF NOT EXISTS {} (
     datetime    DATETIME NOT NULL,
     host_name   VARCHAR(128) NOT NULL,
-    {0}         DECIMAL(30,15),
+    value       DECIMAL(30,15),
     PRIMARY KEY (datetime, host_name)
 )""".format(t) for t in TABLE_NAMES]
 
@@ -42,7 +42,7 @@ def update(dt: datetime, host_name: str, column: str, value: float):
     if column not in TABLE_NAMES:
         logger.error(f"Invalid column name specified: {column}")
     else:
-        cmd = "INSERT INTO {0}(datetime, host_name, {0}) VALUES (%s, %s, %s)".format(column)
+        cmd = "INSERT INTO {0}(datetime, host_name, value) VALUES (%s, %s, %s)".format(column)
         db_execute(cmd, (dt.strftime("%Y-%m-%d %H-%M-%S.%f"), host_name, value))
 
 
