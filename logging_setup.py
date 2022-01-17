@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import config
 
 
@@ -19,7 +20,7 @@ def create_logger(name):
 
 
   # File logger
-  f_handler = logging.FileHandler(config.Logging.file)
+  f_handler = RotatingFileHandler(config.Logging.file,maxBytes=1048576,backupCount=5)
   f_handler.setLevel(config.Logging.terminal_level)
   f_format = logging.Formatter(config.Logging.file_format)
   f_handler.setFormatter(f_format)
