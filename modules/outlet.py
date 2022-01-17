@@ -1,27 +1,27 @@
 from datetime import datetime, timedelta
 from multiprocessing import Queue
 from db_helpers import db_execute
-from mysql.connector.errors import *
-from main import DATETIME_FORMAT
-import logging
+from logging_setup import create_logger
+from functools import cache
+import config
+import mysql
+import sql_templates
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+"""
+Setup to record stats from Sonoff S31 outlets running Espurna.
+Does some things to lump together power, voltage, current values into a single SQL table row.
+"""
+
+
+logger = create_logger('Modules.Outlet')
+
+
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
 """CREATE TABLE IF NOT EXISTS
-host(
-    name        VARCHAR(128) PRIMARY KEY,
-    IP          VARCHAR(15),
-    description VARCHAR(256),
-    SSID        VARCHAR(64),
-    MAC         VARCHAR(17),
-    RSSI        INT
-)""",
-"""CREATE TABLE IF NOT EXISTS
-stat(
+outlet_stats(
     datetime    DATETIME NOT NULL,
     host_name   VARCHAR(128) NOT NULL,
     state       BOOLEAN,
@@ -29,19 +29,15 @@ stat(
     voltage     DECIMAL(30,15),
     power       DECIMAL(30,15),
     energy      DECIMAL(30,15),
-    FOREIGN KEY (host_name) REFERENCES host(name),
+    FOREIGN KEY (host_name) REFERENCES hosts(name),
     PRIMARY KEY (datetime, host_name)
 )"""]
 
 
-"""Topics to accept and sub topics to ignore"""
-ACCEPTED_TOPIC_ROOTS = [
-    "outlets",
+# Topics to accept and sub topics to ignore
+ACCEPTED_TOPIC_PREFIXES = [
+    "espurna",
 ]
-IGNORE_TOPICS = lambda root:(
-    root+"/relay/0/set",
-)
-supported_stats = None
 
 
 """
@@ -64,40 +60,30 @@ energy      float
 """
 
 
-def init(database):
-    global supported_stats
-    
+def init():
     for create_table in CREATE_TABLES:
         db_execute(create_table)
-    supported_stats = get_supported_stats()
 
 
-def get_supported_stats():
-    res = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'stat'")
-    stats = tuple(c[0] for c in res.fetchall())
+@cache
+def get_supported_columns():
+    cursor = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'outlet_stats'")
+    stats = tuple(c[0] for c in cursor.fetchall())
     return stats
 
 
-def host_update(host_name: str, column: str, data):
-    cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
-    db_execute(cmd, (host_name,))
-    if column is not None:
-        cmd = "UPDATE host SET {}=%s WHERE name=%s".format(column)
-        db_execute(cmd, (data, host_name))
-
-
 def get_latest_row(host_name):
-    cmd = "SELECT datetime, state, current, voltage, power, energy FROM stat WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT datetime, state, current, voltage, power, energy FROM outlet_stats WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
     return res
 
 
 def get_last_state(host_name):
-    cmd = "SELECT state FROM stat WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT state FROM outlet_stats WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
-    
+
     if res is not None and len(res) == 1:
         return res[0]
     else:
@@ -106,42 +92,37 @@ def get_last_state(host_name):
 
 def carry_last_state(host_name: str, dt: str):
     last_state = get_last_state(host_name)
-    cmd = "UPDATE stat SET state=%s WHERE host_name=%s AND datetime=%s"
+    cmd = "UPDATE outlet_stats SET state=%s WHERE host_name=%s AND datetime=%s"
     db_execute(cmd, (last_state, host_name, dt))
     logger.debug("Carried last state")
 
 
 def update_stat(dt: datetime, host_name: str, column: str, data):
-    global supported_stats
-    
-    if supported_stats is None:
-        logging.warning("Attempted to log message before init-ing the database with outlet.init_database()")
-        return
-        
-    if column not in supported_stats:
-        print("Ignoring unsupported stat '{}'".format(column))
+    if column not in get_supported_columns():
+        logger.debug("Ignoring unsupported stat '{}'".format(column))
         return
 
     latest = get_latest_row(host_name)
-    
-    if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
+    logger.debug("Latest row in DB for host_name {} is {}".format(host_name, latest))
 
-        cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
-        sql_data = (data, host_name, dt.strftime(DATETIME_FORMAT))
-    
-        print("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
-    
+    if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
+        cmd = "INSERT INTO outlet_stats({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
+        sql_data = (data, host_name, dt.strftime(config.General.DateTimeFormat))
+        logger.debug("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
     else:
-        cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
-        sql_data = (data, host_name, latest[0].strftime(DATETIME_FORMAT))
-    
-        print("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
+        cmd = "UPDATE outlet_stats SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
+        sql_data = (data, host_name, latest[0].strftime(config.General.DateTimeFormat))
+        logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
+
+    logger.info(f"Updated {column} stats with {data} for {host_name}")
 
     try:
         db_execute(cmd, sql_data)
-    except IntegrityError as e:
+    except mysql.connector.errors.IntegrityError as e:
+        logger.warn("Ingegrity error")
+
         if str(e).startswith("1062"):
-            print("Tried to add this entry twice?", e, "\n", cmd, sql_data)
+            logger.warn("Tried to add this entry twice?", e, "\n", cmd, sql_data)
         else:
             host_update(host_name, None, None)
             db_execute(cmd, sql_data)
@@ -150,36 +131,50 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         carry_last_state(host_name, sql_data[-1])
 
 
+def get_hostname(topic):
+    """Parses the device hostname out of the topic"""
+    return topic.split('/')[1]
+
+
+def get_column(topic):
+    """Parses the column of the message topic"""
+    column = topic.split('/')[-1]
+    if len(column) == 1:
+        column = topic.split('/')[-2]
+    return column
+
+
 def save_message(msg):
     """Handles how to save the msg contents into the SQLite database."""
-    host_name = msg.topic.split('/')[0]
-    topic = '/'.join(msg.topic.split('/')[1:])
-    
-    logger.debug("Processing message '{}':'{}'".format(topic, msg.payload))
+    logger.debug("Received message {}:'{}'".format(msg.topic, msg.payload))
 
-    if topic == "ip":
-        host_update(host_name, "IP", msg.payload)
-    elif topic == "desc":
-        host_update(host_name, "description", msg.payload)
-    elif topic == "ssid":
-        host_update(host_name, "SSID", msg.payload)
-    elif topic == "mac":
-        host_update(host_name, "MAC", msg.payload)
-    elif topic == "rssi":
-        host_update(host_name, "RSSI", msg.payload)
+    host_name = get_hostname(msg.topic)
+    logger.debug(f"  Hostname {host_name}")
 
-    elif topic == "relay/0":
+    column = get_column(msg.topic)
+    logger.debug(f"  Column {column}")
+
+    if column in ('status', 'app','version','board','host','uptime','datetime',
+                  'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
+                  'temperature','rssi','mac','ip','desc','ssid'):
+        pass
+    elif column == "0":
         update_stat(msg.datetime, host_name, "state",
                 True if msg.payload == '1' else False)
-    elif topic == "current":
+    elif column == "current":
         update_stat(msg.datetime, host_name, "current",
                 float(msg.payload))
-    elif topic == "voltage":
+    elif column == "voltage":
         update_stat(msg.datetime, host_name, "voltage",
                 float(msg.payload))
-    elif topic == "power":
+    elif column == "power":
         update_stat(msg.datetime, host_name, "power",
                 float(msg.payload))
-    elif topic == "energy":
+    elif column == "energy":
         update_stat(msg.datetime, host_name, "energy",
                 float(msg.payload))
+    elif column == "state":
+        update_stat(msg.datetime, host_name, "state",
+                bool(msg.payload))
+    else:
+        logger.warn("Received a message that couldn't be saved: {}".format(msg.topic))

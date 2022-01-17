@@ -2,3 +2,5 @@ secret.json
 plot.html
 __pycache__
 *~
+*.png
+*.txt
