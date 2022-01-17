@@ -106,7 +106,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
     logger.debug("Latest row in DB for host_name {} is {}".format(host_name, latest))
 
     if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
-        cmd = "INSERT INTO outlet_stats({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
+        cmd = "INSERT IGNORE INTO outlet_stats({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
         sql_data = (data, host_name, dt.strftime(config.General.DateTimeFormat))
         logger.debug("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
     else:

@@ -42,7 +42,7 @@ def update(dt: datetime, host_name: str, column: str, value: float):
     if column not in TABLE_NAMES:
         logger.error(f"Invalid column name specified: {column}")
     else:
-        cmd = "INSERT INTO {0}(datetime, host_name, value) VALUES (%s, %s, %s)".format(column)
+        cmd = "INSERT IGNORE INTO {0}(datetime, host_name, value) VALUES (%s, %s, %s)".format(column)
         db_execute(cmd, (dt.strftime("%Y-%m-%d %H-%M-%S.%f"), host_name, value))
 
     logger.info(f"Updated {column} stats with {value} for {host_name}")
