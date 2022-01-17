@@ -65,20 +65,25 @@ def save_message(msg):
     logger.debug("Saving message {} {}:{}".format(msg.datetime, msg.topic, msg.payload))
 
     for m in modules():
-        if '#' in m.ACCEPTED_TOPIC_PREFIXES:
-            logger.debug("Sending message to module '{}'".format(m))
-            m.save_message(msg)
-            continue
-        for t in m.ACCEPTED_TOPIC_PREFIXES:
-            if msg.topic.startswith(t):
+        try:
+            if '#' in m.ACCEPTED_TOPIC_PREFIXES:
                 logger.debug("Sending message to module '{}'".format(m))
                 m.save_message(msg)
+                continue
+            for t in m.ACCEPTED_TOPIC_PREFIXES:
+                if msg.topic.startswith(t):
+                    logger.debug("Sending message to module '{}'".format(m))
+                    m.save_message(msg)
+        except Exception as e:
+            logger.error(f"Exception raised by module {m}")
+            logger.error(e)
 
 def loop():
     global messages_in
 
     while True:
         save_message(messages_in.get())
+
 
 
 def read_conn_details(path):
