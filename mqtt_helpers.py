@@ -2,7 +2,7 @@ from paho.mqtt.client import Client
 from logging_setup import create_logger
 
 
-logger = create_logger('Database')
+logger = create_logger('MQTT')
 client = None
 
 
