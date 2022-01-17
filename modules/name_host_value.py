@@ -45,6 +45,8 @@ def update(dt: datetime, host_name: str, column: str, value: float):
         cmd = "INSERT INTO {0}(datetime, host_name, value) VALUES (%s, %s, %s)".format(column)
         db_execute(cmd, (dt.strftime("%Y-%m-%d %H-%M-%S.%f"), host_name, value))
 
+    logger.info(f"Updated {column} stats with {value} for {host_name}")
+
 
 def save_message(msg: Message):
     """This is passed every relevent message that MQTT receives."""

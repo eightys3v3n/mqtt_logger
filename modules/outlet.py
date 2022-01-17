@@ -122,6 +122,8 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         sql_data = (data, host_name, latest[0].strftime(config.General.DateTimeFormat))
         logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
+    logger.info(f"Updated {column} stats with {data} for {host_name}")
+
     try:
         db_execute(cmd, sql_data)
     except mysql.connector.errors.IntegrityError as e:
