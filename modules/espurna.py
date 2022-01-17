@@ -6,20 +6,18 @@ from logging_setup import create_logger
 
 """Add the file name to the modules/__init__.py file for it to be used."""
 
-logger = create_logger('Modules.Temperature')
+logger = create_logger('Modules.Espurna')
 
 
-DATABASE_NAME = 'temperature'
 """Commands to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part. These are some example commands."""
 CREATE_TABLES = [
 """CREATE TABLE IF NOT EXISTS {} (
     datetime    DATETIME NOT NULL,
     host_name   VARCHAR(128) NOT NULL,
-    temperature DECIMAL(30,15),
-    location    VARCHAR(256),
+    temperatures DECIMAL(30,15),
     PRIMARY KEY (datetime, host_name)
-)""".format(DATABASE_NAME)]
+)""".format('temperatures')]
 
 
 """Topics to accept, # means everything."""
