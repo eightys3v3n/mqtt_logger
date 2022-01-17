@@ -114,7 +114,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         sql_data = (data, host_name, latest[0].strftime(config.General.DateTimeFormat))
         logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
-    logger.info(f"Updated {column} stats with {data} for {host_name}")
+    logger.info(f"Updated {column} stat to {data} for {host_name}")
 
     try:
         db_execute(cmd, sql_data)
@@ -155,10 +155,10 @@ def save_message(msg):
     logger.debug(f"  Column {column}")
 
     if column in ('status', 'app','version','board','host','uptime','datetime',
-                  'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
+                  'freeheap','loadavg','vcc','reactive','apparent','factor','set',
                   'temperature','rssi','mac','ip','desc','ssid'):
         pass
-    elif column == "state":
+    elif column == "relay":
         update_stat(msg.datetime, host_name, "state",
                 True if msg.payload == '1' else False)
     elif column == "current":
