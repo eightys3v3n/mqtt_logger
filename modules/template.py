@@ -49,7 +49,7 @@ def init(database):
 
 def host_update(host_name: str, column: str, data):
     """An example function showing how to access the database using db_helpers.db_execute()."""
-    cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
+    cmd = "INSERT IGNORE INTO hosts(name) VALUES(%s)"
     db_execute(database, cmd, (host_name,))
     if column is not None:
         cmd = "UPDATE host SET {}=%s WHERE name=%s".format(column)

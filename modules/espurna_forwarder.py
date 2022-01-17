@@ -5,10 +5,11 @@ from logging_setup import create_logger
 from math import isnan
 from mqtt_helpers import publish
 import mqtt_helpers as mqtt
+import sql_templates
 
 
-logger = create_logger('Modules.Espurna')
-CREATE_TABLES = []
+logger = create_logger('Modules.EspurnaForwarder')
+CREATE_TABLES = [sql_templates.Hosts]
 
 """Topics to accept, # means everything."""
 ACCEPTED_TOPIC_PREFIXES = [

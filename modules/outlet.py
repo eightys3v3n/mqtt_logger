@@ -4,10 +4,12 @@ from db_helpers import db_execute
 from logging_setup import create_logger
 from functools import cache
 import config
+import mysql
+import sql_templates
 
 
-""" Currently expecting MQTT structure:
-    outlets/<hostname>/<field>:<value>
+""" Setup to record stats from Sonoff S31 outlets running Espurna
+    Set MQTT root topic to s31_outlets.
 """
 
 
@@ -16,18 +18,9 @@ logger = create_logger('Modules.Outlet')
 
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
-CREATE_TABLES = [
+CREATE_TABLES = [sql_templates.Hosts,
 """CREATE TABLE IF NOT EXISTS
-hosts(
-    name        VARCHAR(128) PRIMARY KEY,
-    IP          VARCHAR(15),
-    description VARCHAR(256),
-    SSID        VARCHAR(64),
-    MAC         VARCHAR(17),
-    RSSI        INT
-)""",
-"""CREATE TABLE IF NOT EXISTS
-outlets(
+outlet_stats(
     datetime    DATETIME NOT NULL,
     host_name   VARCHAR(128) NOT NULL,
     state       BOOLEAN,
@@ -35,14 +28,14 @@ outlets(
     voltage     DECIMAL(30,15),
     power       DECIMAL(30,15),
     energy      DECIMAL(30,15),
-    FOREIGN KEY (host_name) REFERENCES host(name),
+    FOREIGN KEY (host_name) REFERENCES hosts(name),
     PRIMARY KEY (datetime, host_name)
 )"""]
 
 
 # Topics to accept and sub topics to ignore
 ACCEPTED_TOPIC_PREFIXES = [
-    "outlets",
+    "espurna",
 ]
 
 
@@ -72,14 +65,14 @@ def init():
 
 
 @cache
-def get_supported_stats():
-    cursor = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'outlets'")
+def get_supported_columns():
+    cursor = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'outlet_stats'")
     stats = tuple(c[0] for c in cursor.fetchall())
     return stats
 
 
 def host_update(host_name: str, column: str, data):
-    cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
+    cmd = "INSERT IGNORE INTO hosts(name) VALUES(%s)"
     db_execute(cmd, (host_name,))
     if column is not None:
         cmd = "UPDATE hosts SET {}=%s WHERE name=%s".format(column)
@@ -87,14 +80,14 @@ def host_update(host_name: str, column: str, data):
 
 
 def get_latest_row(host_name):
-    cmd = "SELECT datetime, state, current, voltage, power, energy FROM outlets WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT datetime, state, current, voltage, power, energy FROM outlet_stats WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
     return res
 
 
 def get_last_state(host_name):
-    cmd = "SELECT state FROM outlets WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT state FROM outlet_stats WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
 
@@ -106,13 +99,13 @@ def get_last_state(host_name):
 
 def carry_last_state(host_name: str, dt: str):
     last_state = get_last_state(host_name)
-    cmd = "UPDATE outlets SET state=%s WHERE host_name=%s AND datetime=%s"
+    cmd = "UPDATE outlet_stats SET state=%s WHERE host_name=%s AND datetime=%s"
     db_execute(cmd, (last_state, host_name, dt))
     logger.debug("Carried last state")
 
 
 def update_stat(dt: datetime, host_name: str, column: str, data):
-    if column not in get_supported_stats():
+    if column not in get_supported_columns():
         logger.debug("Ignoring unsupported stat '{}'".format(column))
         return
 
@@ -120,11 +113,11 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
     logger.debug("Latest row in DB for host_name {} is {}".format(host_name, latest))
 
     if latest is None or latest[0] < dt - timedelta(seconds=3) or latest[0] > dt + timedelta(seconds=3):
-        cmd = "INSERT INTO stat({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
+        cmd = "INSERT INTO outlet_stats({}, host_name, datetime) VALUES(%s, %s, %s)".format(column)
         sql_data = (data, host_name, dt.strftime(config.General.DateTimeFormat))
         logger.debug("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
     else:
-        cmd = "UPDATE outlets SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
+        cmd = "UPDATE outlet_stats SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
         sql_data = (data, host_name, latest[0].strftime(config.General.DateTimeFormat))
         logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
@@ -166,7 +159,9 @@ def save_message(msg):
     column = get_column(msg.topic)
     logger.debug(f"  Column {column}")
 
-    if column in ('status', 'app','version','board','host','uptime','datetime','freeheap','loadavg','vcc','relay','reactive','apparent','factor','set'):
+    if column in ('status', 'app','version','board','host','uptime','datetime',
+                  'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
+                  'temperature'):
         pass
     elif column == "ip":
         host_update(host_name, "IP", msg.payload)
