@@ -47,7 +47,11 @@ def save_message(msg: Message):
 
     field = msg.topic.split('/')[-1]
 
-    if field == "temperature":
+    if field in ('app','version','board','host','uptime','datetime','freeheap',
+                 '0','vcc','status','loadavg','current','voltage','power',
+                 'reactive','apparent','factor','energy'):
+        pass
+    elif field == "temperature":
         redirect_temperature(dt, msg)
     else:
         logger.warn("Received a message that couldn't be saved: {}".format(msg.topic))
