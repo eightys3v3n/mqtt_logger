@@ -18,7 +18,7 @@ logger = create_logger('Modules.Outlet')
 So you need the [IF NOT EXISTS] part."""
 CREATE_TABLES = [
 """CREATE TABLE IF NOT EXISTS
-host(
+hosts(
     name        VARCHAR(128) PRIMARY KEY,
     IP          VARCHAR(15),
     description VARCHAR(256),
@@ -27,7 +27,7 @@ host(
     RSSI        INT
 )""",
 """CREATE TABLE IF NOT EXISTS
-stat(
+outlets(
     datetime    DATETIME NOT NULL,
     host_name   VARCHAR(128) NOT NULL,
     state       BOOLEAN,
@@ -73,7 +73,7 @@ def init():
 
 @cache
 def get_supported_stats():
-    cursor = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'stat'")
+    cursor = db_execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'outlets'")
     stats = tuple(c[0] for c in cursor.fetchall())
     return stats
 
@@ -82,19 +82,19 @@ def host_update(host_name: str, column: str, data):
     cmd = "INSERT IGNORE INTO host(name) VALUES(%s)"
     db_execute(cmd, (host_name,))
     if column is not None:
-        cmd = "UPDATE host SET {}=%s WHERE name=%s".format(column)
+        cmd = "UPDATE hosts SET {}=%s WHERE name=%s".format(column)
         db_execute(cmd, (data, host_name))
 
 
 def get_latest_row(host_name):
-    cmd = "SELECT datetime, state, current, voltage, power, energy FROM stat WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT datetime, state, current, voltage, power, energy FROM outlets WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
     return res
 
 
 def get_last_state(host_name):
-    cmd = "SELECT state FROM stat WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
+    cmd = "SELECT state FROM outlets WHERE host_name=%s AND state IS NOT NULL ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
     res = res.fetchone()
 
@@ -106,7 +106,7 @@ def get_last_state(host_name):
 
 def carry_last_state(host_name: str, dt: str):
     last_state = get_last_state(host_name)
-    cmd = "UPDATE stat SET state=%s WHERE host_name=%s AND datetime=%s"
+    cmd = "UPDATE outlets SET state=%s WHERE host_name=%s AND datetime=%s"
     db_execute(cmd, (last_state, host_name, dt))
     logger.debug("Carried last state")
 
@@ -124,7 +124,7 @@ def update_stat(dt: datetime, host_name: str, column: str, data):
         sql_data = (data, host_name, dt.strftime(config.General.DateTimeFormat))
         logger.debug("Adding a new row, {}:{} {}={}".format(dt, host_name, column, data))
     else:
-        cmd = "UPDATE stat SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
+        cmd = "UPDATE outlets SET {}=%s WHERE host_name=%s AND datetime=%s".format(column)
         sql_data = (data, host_name, latest[0].strftime(config.General.DateTimeFormat))
         logger.debug("Updating existing row, {}:{} {}={}".format(latest[0], host_name, column, data))
 
