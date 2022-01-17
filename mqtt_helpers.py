@@ -28,3 +28,8 @@ def loop_start():
 
 def disconnect():
   client.disconnect()
+
+
+def publish(*args, **kwargs):
+  logger.debug("Publishing message: ".format(args, kwargs))
+  client.publish(*args, **kwargs)

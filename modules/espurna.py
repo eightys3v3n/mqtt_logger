@@ -2,62 +2,38 @@ from db_helpers import db_execute
 from datetime import datetime
 from main import Message
 from logging_setup import create_logger
+from math import isnan
+from mqtt_helpers import publish
+import mqtt_helpers as mqtt
 
-
-"""Add the file name to the modules/__init__.py file for it to be used."""
 
 logger = create_logger('Modules.Espurna')
-
-
-"""Commands to create the database, this is run every time the database is opened.
-So you need the [IF NOT EXISTS] part. These are some example commands."""
-CREATE_TABLES = [
-"""CREATE TABLE IF NOT EXISTS {} (
-    datetime    DATETIME NOT NULL,
-    host_name   VARCHAR(128) NOT NULL,
-    temperatures DECIMAL(30,15),
-    PRIMARY KEY (datetime, host_name)
-)""".format('temperatures')]
-
+CREATE_TABLES = []
 
 """Topics to accept, # means everything."""
 ACCEPTED_TOPIC_PREFIXES = [
-    "temperatures",
+    "espurna",
 ]
-
-"""Hard coded locations of the temperature monitors. The alternative was keeping a record somewhere else
-(hard to use SQL statements to select locations). Or reprogramming each unit when moving it (not ideal)"""
-LOCATIONS = {
-	'temp1': "",
-	'temp2': "Study room at sitting level",
-	'temp3': "Dining room at floor level",
-    'temp4': "Terrences room on phone charging table",
-	'temp5': "",
-	'temp6': "Study room at floor level",
-}
 
 
 def init():
-    """This is run once the database is connected. Do anything that needs to be done only once per script execution here."""
-    for create_table in CREATE_TABLES:
-        db_execute(create_table)
+    pass
 
 
-def temp_update(dt: datetime, host_name: str, temperature: float):
-    if host_name in LOCATIONS:
-        location = LOCATIONS[host_name]
-    else:
-        location = "Unknown"
-        
-    cmd = "INSERT INTO {}(datetime, host_name, temperature, location) VALUES (%s, %s, %s, %s)".format(DATABASE_NAME)
-    db_execute(cmd, (dt.strftime("%Y-%m-%d %H-%M-%S.%f"), host_name, temperature, location,))
-    
+def redirect_temperature(dt, msg):
+    host_name = msg.topic.split('/')[1]
+    value = float(msg.payload)
+
+    logger.debug(f"Redirecting temperature message from {host_name}")
+
+    if isnan(value):
+        logger.warning(f"Received NaN value for {field} from host:{host_name}")
+        return
+
+    mqtt.publish(f'temperatures/{host_name}', value)
+
 
 def save_message(msg: Message):
-    """This is passed every relevent message that MQTT receives."""
-    host_name = msg.topic.split('/')[0]
-    temp = float(msg.payload)
-
     """ This is improper and leads to inaccuracies when starting the client.
     MQTT will resend messages for the last so many minutes if they weren't delivered.
     So if this was stopped for a day, a bunch of out of date messages will come in at the
@@ -68,4 +44,9 @@ def save_message(msg: Message):
     Good enough for now though."""
     dt = datetime.now()
 
-    temp_update(dt, host_name, temp)
+    field = msg.topic.split('/')[-1]
+
+    if field == "temperature":
+        redirect_temperature(dt, msg)
+    else:
+        logger.warn("Received a message that couldn't be saved: {}".format(msg.topic))
