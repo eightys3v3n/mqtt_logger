@@ -158,7 +158,7 @@ def save_message(msg):
                   'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
                   'temperature','rssi','mac','ip','desc','ssid'):
         pass
-    elif column == "0":
+    elif column == "state":
         update_stat(msg.datetime, host_name, "state",
                 True if msg.payload == '1' else False)
     elif column == "current":
@@ -173,8 +173,5 @@ def save_message(msg):
     elif column == "energy":
         update_stat(msg.datetime, host_name, "energy",
                 float(msg.payload))
-    elif column == "state":
-        update_stat(msg.datetime, host_name, "state",
-                bool(msg.payload))
     else:
         logger.warn("Received a message that couldn't be saved: {}".format(msg.topic))

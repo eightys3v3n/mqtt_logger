@@ -4,21 +4,42 @@ Logs MQTT messages into an SQL database using various modules to allow for loggi
 
 ## Getting started
 ### Installation
-- Requires paho from pip. Please create an issue if I have forgotten dependencies.
+- Requires paho from pip.
 - Setup an SQL user and password for this program to access the database through.
 - Setup Mosquitto (an MQTT server) with a username and password for this program.
+- Rename `secret.json.example` to `secret.json` and change the MQTT and SQL usernames, passwords, and hosts. If there is no MQTT authentication leave username and password empty.
 - Run with `python main.py`
 
-### Usage
-- Rename `secret.json.example` to `secret.json` and change the MQTT and SQL usernames, passwords, and hosts. If there is no MQTT authentication leave username and password empty.
-- This program should print out all the MQTT messages it receives. Use this to make a module that converts the received messages into SQL data and adds it to the appropriate tables. **Modules are not implemented yet. This currently only handles a smart outlet running Espirna and logging to the MQTT server).**
-
 ## Modules
-Modules are all created by copying the modules/template.py file. They should be detected on next run and all relavent messages passed to them.
+Modules are loaded by the program and are handed what every MQTT messages they claim to be able to deal with.
+
+### Espurna Devices Info
+Records device information from MQTT messages formatted as `espurna/<device_name>/info`.
+Stored into an SQL table whose table creation syntax is in sql_templates.py.
+Currently supports the following fields reported by Espurna:
+- ip :: str IP address
+- desc :: str Description
+- ssid :: str WiFi Name
+- mac :: str MAC address
+- rssi :: int WiFi signal strength
+
+### Espurna Forwarder
+Receives temperature messages in `espurna/<device_name>/temperature` and reposts them to `temperatures/<device_name>`.
+
+### Name-Host-Value
+Receives messages from root topics containing device IDs and saves them into their respective SQL tables.
+Currently supports the following SQL tables and MQTT topics
+- temperatures
+- relative_humidities
+- total_volatile_organic_compounds
 
 ### Espurna Smart Outlet
-Records into host(name, IP, description, SSID, MAC, RSSI) and stat(datetime, host_name, state, current, voltage, power, energy) table. Set the outlet to QOS 2 to not break the datetime rounding. Set the root topic to {hostname}, this will be used as the host.name and stat.host_name. Set "Power Units" to watts and "Energy Units" to killowatt hours.  
-- stat.datetime has some odd rounding such that all messages received in a given interval are set to the same datetime. This allows for easy searching. Without this there is no way to put all the collected information into a single row. Each piece of information comes in at a different time.
-- stat. everything else is as shown on the Espirna pages. Power is current Wattage, Energy is recorded Watt hours.
-### Temperature recorder
-This is to-be-implemented for temperature monitors with code yet-to-be written. It will allow for recording of temperature data from multiple devices in the same way the Espurna Smart Outlet module does for power usage.
+Records power usage stats from Sonoff S31 outlets running Espurna.
+Currently supports the following fields:
+- state :: whether the outlet is on(1) or off(0)
+- current :: amps
+- voltage
+- power :: watts
+- energy :: kWh
+Datetime undergoes some rounding such that all messages received in a given interval are set to the same datetime. This allows for easy searching.
+Without this there is no way to put all the collected information into a single row. Each piece of information comes in at a different time.
