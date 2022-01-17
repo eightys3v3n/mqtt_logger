@@ -1,4 +1,3 @@
-from paho.mqtt.client import Client
 from multiprocessing import Queue
 import modules as __modules__
 import json
@@ -6,6 +5,7 @@ from pathlib import Path
 import config
 from datetime import datetime
 from db_helpers import *
+import mqtt_helpers as mqtt
 from logging_setup import create_logger
 
 
@@ -97,17 +97,18 @@ def main():
     global messages_in
 
     messages_in = Queue()
-    client = Client(client_id="Logger {}".format(datetime.now().strftime("%Y%m%d%H%M")))
-    client.on_connect = on_connect
-    client.on_message = on_message
+    mqtt.create(client_id="Logger {}".format(datetime.now().strftime("%Y%m%d%H%M")),
+                 on_connect=on_connect,
+                 on_message=on_message)
 
     (mqtt_host, mqtt_creds), sql_creds = read_conn_details(config.General.SecretFile)
 
     logger.info("Connecting to MQTT host: {}".format(mqtt_host))
 
     if mqtt_creds[0] != "" and mqtt_creds[1] != "":
-        client.username_pw_set(*mqtt_creds)
-    client.connect(*mqtt_host, 60)
+        mqtt.username_pw_set(*mqtt_creds)
+    mqtt.connect(host=mqtt_host[0],
+                 port=mqtt_host[1])
 
     try:
         open_database(*sql_creds)
@@ -116,13 +117,13 @@ def main():
             m.init()
 
         logger.info("Starting MQTT client...")
-        client.loop_start()
+        mqtt.loop_start()
         logger.info("Starting logger loop...")
         loop()
     except KeyboardInterrupt:
         logger.info("Quitting from keyboard interrupt")
     finally:
-        client.disconnect()
+        mqtt.disconnect()
         try:
             close_database()
         except UnboundLocalError: pass

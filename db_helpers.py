@@ -3,8 +3,6 @@ from logging_setup import create_logger
 
 
 logger = create_logger('Database')
-
-
 database = None
 
 
