@@ -72,14 +72,6 @@ def get_supported_columns():
     return stats
 
 
-def host_update(host_name: str, column: str, data):
-    cmd = "INSERT IGNORE INTO hosts(name) VALUES(%s)"
-    db_execute(cmd, (host_name,))
-    if column is not None:
-        cmd = "UPDATE hosts SET {}=%s WHERE name=%s".format(column)
-        db_execute(cmd, (data, host_name))
-
-
 def get_latest_row(host_name):
     cmd = "SELECT datetime, state, current, voltage, power, energy FROM outlet_stats WHERE host_name=%s ORDER BY datetime desc LIMIT 1"
     res = db_execute(cmd, (host_name,))
@@ -164,20 +156,9 @@ def save_message(msg):
 
     if column in ('status', 'app','version','board','host','uptime','datetime',
                   'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
-                  'temperature'):
+                  'temperature','rssi','mac','ip','desc','ssid'):
         pass
-    elif column == "ip":
-        host_update(host_name, "IP", msg.payload)
-    elif column == "desc":
-        host_update(host_name, "description", msg.payload)
-    elif column == "ssid":
-        host_update(host_name, "SSID", msg.payload)
-    elif column == "mac":
-        host_update(host_name, "MAC", msg.payload)
-    elif column == "rssi":
-        host_update(host_name, "RSSI", msg.payload)
-
-    elif column == "relay/0":
+    elif column == "0":
         update_stat(msg.datetime, host_name, "state",
                 True if msg.payload == '1' else False)
     elif column == "current":
@@ -192,5 +173,8 @@ def save_message(msg):
     elif column == "energy":
         update_stat(msg.datetime, host_name, "energy",
                 float(msg.payload))
+    elif column == "state":
+        update_stat(msg.datetime, host_name, "state",
+                bool(msg.payload))
     else:
         logger.warn("Received a message that couldn't be saved: {}".format(msg.topic))
