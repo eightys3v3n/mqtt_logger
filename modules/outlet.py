@@ -8,8 +8,9 @@ import mysql
 import sql_templates
 
 
-""" Setup to record stats from Sonoff S31 outlets running Espurna
-    Set MQTT root topic to s31_outlets.
+"""
+Setup to record stats from Sonoff S31 outlets running Espurna.
+Does some things to lump together power, voltage, current values into a single SQL table row.
 """
 
 
@@ -18,7 +19,7 @@ logger = create_logger('Modules.Outlet')
 
 """Command to create the database, this is run every time the database is opened.
 So you need the [IF NOT EXISTS] part."""
-CREATE_TABLES = [sql_templates.Hosts,
+CREATE_TABLES = [
 """CREATE TABLE IF NOT EXISTS
 outlet_stats(
     datetime    DATETIME NOT NULL,

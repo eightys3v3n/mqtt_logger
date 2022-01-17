@@ -8,8 +8,14 @@ import mqtt_helpers as mqtt
 import sql_templates
 
 
-logger = create_logger('Modules.EspurnaForwarder')
-CREATE_TABLES = [sql_templates.Hosts]
+"""
+Receives things in epsurna MQTT root topic and forwards them to the correct areas.
+Currently forwarding temperature values as the MQTT structure i wan't isn't achievable
+in Espurna.
+"""
+
+
+logger = create_logger('Modules.TempFwrd')
 
 """Topics to accept, # means everything."""
 ACCEPTED_TOPIC_PREFIXES = [
@@ -33,6 +39,8 @@ def redirect_temperature(dt, msg):
 
     mqtt.publish(f'temperatures/{host_name}', value)
 
+    logger.info(f"Redirected temperature of {value} for {host_name}")
+
 
 def save_message(msg: Message):
     """ This is improper and leads to inaccuracies when starting the client.
@@ -47,9 +55,10 @@ def save_message(msg: Message):
 
     field = msg.topic.split('/')[-1]
 
-    if field in ('app','version','board','host','uptime','datetime','freeheap',
-                 '0','vcc','status','loadavg','current','voltage','power',
-                 'reactive','apparent','factor','energy'):
+    if field in ('status', 'app','version','board','host','uptime','datetime',
+                 'freeheap','loadavg','vcc','relay','reactive','apparent','factor','set',
+                 'rssi','mac','ip','desc','ssid','current','voltage','power',
+                 'reactive','apparent','factor','energy','0'):
         pass
     elif field == "temperature":
         redirect_temperature(dt, msg)
