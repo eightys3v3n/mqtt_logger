@@ -25,6 +25,7 @@ def close_database():
         database.commit()
         database.close()
     except NameError: pass
+    except NoneType: pass
     finally:
         logger.info("Closed database connection.")
 
