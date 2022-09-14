@@ -25,7 +25,11 @@ def close_database():
         database.commit()
         database.close()
     except NameError: pass
-    except NoneType: pass
+    except AttributeError as e:
+        if 'NoneType' in e:
+            pass
+        else:
+            raise AttributeError(e)
     finally:
         logger.info("Closed database connection.")
 
