@@ -26,7 +26,7 @@ def close_database():
         database.close()
     except NameError: pass
     except AttributeError as e:
-        if 'NoneType' in e:
+        if 'NoneType' in str(e):
             pass
         else:
             raise AttributeError(e)
