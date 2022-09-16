@@ -1,4 +1,4 @@
-from mysql.connector import connect
+from mariadb import connect
 from logging_setup import create_logger
 
 
